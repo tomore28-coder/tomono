@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EC デザイン採点ツール</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --surface2: #f2f1ee;
+    --border: #e0ddd6;
+    --text: #1a1a18;
+    --text2: #6b6960;
+    --text3: #a09d96;
+    --accent: #1a1a18;
+    --green: #3B6D11; --green-bg: #EAF3DE;
+    --amber: #854F0B; --amber-bg: #FAEEDA;
+    --red: #A32D2D;   --red-bg: #FCEBEB;
+    --blue: #185FA5;
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+  body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .page { max-width: 640px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: var(--text2); margin-bottom: 2rem; }
+
+  .upload-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    background: var(--surface);
+    transition: border-color .15s, background .15s;
+    margin-bottom: 1rem;
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: #888; background: var(--surface2); }
+  .upload-zone svg { display: block; margin: 0 auto 10px; color: var(--text3); }
+  .upload-zone p { font-size: 15px; color: var(--text2); }
+  .upload-zone span { font-size: 13px; color: var(--text3); margin-top: 4px; display: block; }
+  #file-input { display: none; }
+
+  #preview-area { display: none; margin-bottom: 1rem; }
+  #preview-img { width: 100%; max-height: 280px; object-fit: contain; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+  label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 4px; }
+  select, input[type="text"] {
+    width: 100%; font-size: 14px; padding: 9px 12px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+  }
+  select:focus, input:focus { border-color: #888; }
+
+  .btn-primary {
+    width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+    border-radius: var(--radius); cursor: pointer;
+    border: none; background: var(--accent); color: #fff;
+    margin-bottom: 1.5rem; transition: opacity .15s;
+  }
+  .btn-primary:hover { opacity: .85; }
+  .btn-primary:disabled { opacity: .35; cursor: not-allowed; }
+
+  .error { background: var(--red-bg); color: var(--red); padding: 12px 14px; border-radius: var(--radius); font-size: 14px; margin-bottom: 1rem; display: none; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 3rem 0; display: none; }
+  .spinner { width: 36px; height: 36px; border: 2.5px solid var(--border); border-top-color: var(--text); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 12px; }
+  .loading p { font-size: 14px; color: var(--text2); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results */
+  #score-content { display: none; }
+
+  .total-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.25rem 1.5rem;
+    display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1rem;
+  }
+  .total-num { font-size: 52px; font-weight: 700; line-height: 1; min-width: 80px; }
+  .grade { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .verdict { font-size: 14px; color: var(--text2); line-height: 1.6; }
+
+  .score-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.5rem; }
+  .score-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; }
+  .score-card .s-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; line-height: 1.3; }
+  .score-card .s-num { font-size: 24px; font-weight: 600; }
+  .score-card .s-max { font-size: 12px; color: var(--text3); }
+  .bar-wrap { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .bar { height: 3px; border-radius: 2px; transition: width .6s ease; }
+
+  .section-title { font-size: 12px; font-weight: 600; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
+  .feedback-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .feedback-item:last-child { border-bottom: none; }
+  .tag { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; min-width: 56px; text-align: center; flex-shrink: 0; margin-top: 2px; }
+  .tag.good { background: var(--green-bg); color: var(--green); }
+  .tag.warn { background: var(--amber-bg); color: var(--amber); }
+  .tag.ng   { background: var(--red-bg);   color: var(--red); }
+  .fb-text { font-size: 14px; line-height: 1.65; }
+  .fb-text strong { font-weight: 600; }
+
+  .feedback-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+
+  .btn-retry { font-size: 14px; padding: 9px 20px; border-radius: var(--radius); cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+  .btn-retry:hover { background: var(--surface2); }
+
+  @media (max-width: 480px) {
+    .score-grid { grid-template-columns: repeat(2, 1fr); }
+    .row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>EC デザイン採点ツール</h1>
+  <p class="subtitle">バナー・LPの画像をアップロードするとAIが6観点で採点してアドバイスします</p>
+
+  <div class="upload-zone" id="upload-zone">
+    <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 16V8m0 0-3 3m3-3 3 3M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1"/></svg>
+    <p>画像をここにドロップ、またはクリックして選択</p>
+    <span>PNG / JPG / WEBP 対応</span>
+    <input type="file" id="file-input" accept="image/*">
+  </div>
+
+  <div id="preview-area">
+    <img id="preview-img" alt="アップロードされたデザイン">
+  </div>
+
+  <div class="row">
+    <div>
+      <label for="type-select">制作物の種類</label>
+      <select id="type-select">
+        <option>バナー広告（楽天・Yahoo）</option>
+        <option>LP（商品ページ全体）</option>
+        <option>LP上部ファーストビュー</option>
+        <option>商品サムネイル</option>
+        <option>SNSバナー</option>
+      </select>
+    </div>
+    <div>
+      <label for="context-input">ターゲット・商品情報（任意）</label>
+      <input type="text" id="context-input" placeholder="例：30代女性向けサウナグッズ">
+    </div>
+  </div>
+
+  <div id="error-msg" class="error"></div>
+
+  <button class="btn-primary" id="submit-btn" disabled>AIで採点する</button>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>AIがデザインを分析中...</p>
+  </div>
+
+  <div id="score-content">
+    <div class="total-card">
+      <div class="total-num" id="total-num">--</div>
+      <div>
+        <div class="grade" id="grade-text"></div>
+        <div class="verdict" id="verdict-text"></div>
+      </div>
+    </div>
+
+    <div class="score-grid" id="score-grid"></div>
+
+    <div class="feedback-wrap">
+      <div class="section-title">フィードバック詳細</div>
+      <div id="feedback-list"></div>
+    </div>
+
+    <button class="btn-retry" onclick="reset()">別の画像を採点する</button>
+  </div>
+</div>
+
+<script>
+let imageBase64 = null, imageType = 'image/jpeg';
+
+const uploadZone = document.getElementById('upload-zone');
+const fileInput  = document.getElementById('file-input');
+const previewArea = document.getElementById('preview-area');
+const previewImg  = document.getElementById('preview-img');
+const submitBtn   = document.getElementById('submit-btn');
+const loading     = document.getElementById('loading');
+const scoreContent = document.getElementById('score-content');
+const errorMsg    = document.getElementById('error-msg');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+function loadFile(file) {
+  imageType = file.type || 'image/jpeg';
+  const reader = new FileReader();
+  reader.onload = e => {
+    imageBase64 = e.target.result.split(',')[1];
+    previewImg.src = e.target.result;
+    previewArea.style.display = 'block';
+    submitBtn.disabled = false;
+    scoreContent.style.display = 'none';
+    errorMsg.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+submitBtn.addEventListener('click', analyze);
+
+async function analyze() {
+  if (!imageBase64) return;
+  submitBtn.disabled = true;
+  loading.style.display = 'block';
+  scoreContent.style.display = 'none';
+  errorMsg.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64, imageType,
+        designType: document.getElementById('type-select').value,
+        context: document.getElementById('context-input').value
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'エラーが発生しました');
+    renderResult(data);
+  } catch(err) {
+    errorMsg.textContent = 'エラー: ' + err.message;
+    errorMsg.style.display = 'block';
+    submitBtn.disabled = false;
+  } finally {
+    loading.style.display = 'none';
+  }
+}
+
+function renderResult(r) {
+  scoreContent.style.display = 'block';
+  const s = r.scores;
+  const total = s.visibility + s.appeal + s.impact + s.infoDesign + s.brand + s.technical;
+  document.getElementById('total-num').textContent = total;
+
+  let grade, color;
+  if (total >= 90) { grade = 'S — 即戦力クオリティ'; color = '#3B6D11'; }
+  else if (total >= 80) { grade = 'A — 高品質'; color = '#185FA5'; }
+  else if (total >= 70) { grade = 'B — 合格ライン'; color = '#854F0B'; }
+  else if (total >= 60) { grade = 'C — 要ブラッシュアップ'; color = '#BA7517'; }
+  else { grade = 'D — 要大幅修正'; color = '#A32D2D'; }
+
+  const gradeEl = document.getElementById('grade-text');
+  gradeEl.textContent = grade; gradeEl.style.color = color;
+  document.getElementById('verdict-text').textContent = r.verdict;
+
+  const cats = [
+    { key: 'visibility', label: '視認性\n可読性', max: 20 },
+    { key: 'appeal',     label: '購買\n訴求力', max: 20 },
+    { key: 'impact',     label: 'ビジュアル\nインパクト', max: 20 },
+    { key: 'infoDesign', label: '情報\n設計', max: 20 },
+    { key: 'brand',      label: 'ブランド\n整合性', max: 10 },
+    { key: 'technical',  label: '技術\n品質', max: 10 },
+  ];
+  const grid = document.getElementById('score-grid');
+  grid.innerHTML = cats.map(c => {
+    const v = s[c.key], pct = Math.round(v / c.max * 100);
+    const bc = pct >= 80 ? '#639922' : pct >= 60 ? '#EF9F27' : '#E24B4A';
+    return `<div class="score-card">
+      <div class="s-label">${c.label.replace('\n','<br>')}</div>
+      <div><span class="s-num">${v}</span><span class="s-max">/${c.max}</span></div>
+      <div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${bc}"></div></div>
+    </div>`;
+  }).join('');
+
+  const list = document.getElementById('feedback-list');
+  list.innerHTML = (r.feedback || []).map(f => {
+    const label = f.type === 'good' ? '◎ 良い点' : f.type === 'warn' ? '△ 改善' : '× 要修正';
+    return `<div class="feedback-item">
+      <span class="tag ${f.type}">${label}</span>
+      <div class="fb-text"><strong>${f.point}</strong>：${f.text}</div>
+    </div>`;
+  }).join('');
+}
+
+function reset() {
+  imageBase64 = null; fileInput.value = '';
+  previewArea.style.display = 'none'; previewImg.src = '';
+  scoreContent.style.display = 'none';
+  errorMsg.style.display = 'none';
+  submitBtn.disabled = true;
+  document.getElementById('context-input').value = '';
+}
+</script>
+</body>
+</html>
