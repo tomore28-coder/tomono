@@ -77,40 +77,33 @@
   /* Results */
   #score-content { display: none; }
 
-  .total-card {
+  .result-card {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); padding: 1.25rem 1.5rem;
-    display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1rem;
+    border-radius: var(--radius-lg); padding: 1.5rem 1.5rem;
+    margin-bottom: 1.5rem;
+    font-size: 14.5px; line-height: 1.85; color: var(--text);
+    overflow-wrap: break-word;
   }
-  .total-num { font-size: 52px; font-weight: 700; line-height: 1; min-width: 80px; }
-  .grade { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
-  .verdict { font-size: 14px; color: var(--text2); line-height: 1.6; }
-
-  .score-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.5rem; }
-  .score-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; }
-  .score-card .s-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; line-height: 1.3; }
-  .score-card .s-num { font-size: 24px; font-weight: 600; }
-  .score-card .s-max { font-size: 12px; color: var(--text3); }
-  .bar-wrap { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
-  .bar { height: 3px; border-radius: 2px; transition: width .6s ease; }
-
-  .section-title { font-size: 12px; font-weight: 600; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
-  .feedback-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-  .feedback-item:last-child { border-bottom: none; }
-  .tag { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; min-width: 56px; text-align: center; flex-shrink: 0; margin-top: 2px; }
-  .tag.good { background: var(--green-bg); color: var(--green); }
-  .tag.warn { background: var(--amber-bg); color: var(--amber); }
-  .tag.ng   { background: var(--red-bg);   color: var(--red); }
-  .fb-text { font-size: 14px; line-height: 1.65; }
-  .fb-text strong { font-weight: 600; }
-
-  .feedback-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+  .result-card .md-h1 { font-size: 19px; font-weight: 700; margin: 0 0 12px; }
+  .result-card .md-h2 {
+    font-size: 15px; font-weight: 700; margin: 26px 0 10px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+  .result-card .md-h2:first-child { margin-top: 0; }
+  .result-card .md-item { font-weight: 600; margin: 16px 0 4px; }
+  .result-card .md-quote {
+    display: block; margin: 4px 0 4px 2px; padding: 8px 12px;
+    background: var(--surface2); border-left: 3px solid var(--border);
+    border-radius: 4px; font-size: 13.5px; color: var(--text2);
+  }
+  .result-card .md-list { margin: 2px 0 2px 1.2em; }
+  .result-card strong { font-weight: 700; }
+  .result-card p { margin: 2px 0; }
 
   .btn-retry { font-size: 14px; padding: 9px 20px; border-radius: var(--radius); cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
   .btn-retry:hover { background: var(--surface2); }
 
   @media (max-width: 480px) {
-    .score-grid { grid-template-columns: repeat(2, 1fr); }
     .row { grid-template-columns: 1fr; }
   }
 </style>
@@ -118,7 +111,7 @@
 <body>
 <div class="page">
   <h1>EC デザイン採点ツール</h1>
-  <p class="subtitle">バナー・LPの画像をアップロードするとAIが6観点で採点してアドバイスします</p>
+  <p class="subtitle">バナー・LPの画像をアップロードすると、AIが「デザイン基礎」「売れるデザイン」の2視点・14項目で採点し、問いかけ形式でアドバイスします</p>
 
   <div class="upload-zone" id="upload-zone">
     <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 16V8m0 0-3 3m3-3 3 3M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1"/></svg>
@@ -158,21 +151,7 @@
   </div>
 
   <div id="score-content">
-    <div class="total-card">
-      <div class="total-num" id="total-num">--</div>
-      <div>
-        <div class="grade" id="grade-text"></div>
-        <div class="verdict" id="verdict-text"></div>
-      </div>
-    </div>
-
-    <div class="score-grid" id="score-grid"></div>
-
-    <div class="feedback-wrap">
-      <div class="section-title">フィードバック詳細</div>
-      <div id="feedback-list"></div>
-    </div>
-
+    <div class="result-card" id="result-card"></div>
     <button class="btn-retry" onclick="reset()">別の画像を採点する</button>
   </div>
 </div>
@@ -243,50 +222,32 @@ async function analyze() {
   }
 }
 
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function inlineMd(s) {
+  return s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
+// Minimal markdown → HTML for the score report (headings, bold, quotes, lists).
+// No collapsible UI — everything renders as plain readable text/blocks.
+function markdownToHtml(md) {
+  return md.split('\n').map(raw => {
+    const line = escapeHtml(raw);
+    if (/^# /.test(raw)) return `<div class="md-h1">${inlineMd(line.slice(2))}</div>`;
+    if (/^## /.test(raw)) return `<div class="md-h2">${inlineMd(line.slice(3))}</div>`;
+    if (/^\*\*.+\*\*$/.test(raw.trim())) return `<div class="md-item">${inlineMd(line.trim())}</div>`;
+    if (/^>\s?/.test(raw)) return `<span class="md-quote">${inlineMd(line.replace(/^&gt;\s?/, ''))}</span>`;
+    if (/^(\d+\.|[-□])\s?/.test(raw.trim())) return `<div class="md-list">${inlineMd(line)}</div>`;
+    if (raw.trim() === '') return '';
+    return `<p>${inlineMd(line)}</p>`;
+  }).join('');
+}
+
 function renderResult(r) {
   scoreContent.style.display = 'block';
-  const s = r.scores;
-  const total = s.visibility + s.appeal + s.impact + s.infoDesign + s.brand + s.technical;
-  document.getElementById('total-num').textContent = total;
-
-  let grade, color;
-  if (total >= 90) { grade = 'S — 即戦力クオリティ'; color = '#3B6D11'; }
-  else if (total >= 80) { grade = 'A — 高品質'; color = '#185FA5'; }
-  else if (total >= 70) { grade = 'B — 合格ライン'; color = '#854F0B'; }
-  else if (total >= 60) { grade = 'C — 要ブラッシュアップ'; color = '#BA7517'; }
-  else { grade = 'D — 要大幅修正'; color = '#A32D2D'; }
-
-  const gradeEl = document.getElementById('grade-text');
-  gradeEl.textContent = grade; gradeEl.style.color = color;
-  document.getElementById('verdict-text').textContent = r.verdict;
-
-  const cats = [
-    { key: 'visibility', label: '視認性\n可読性', max: 20 },
-    { key: 'appeal',     label: '購買\n訴求力', max: 20 },
-    { key: 'impact',     label: 'ビジュアル\nインパクト', max: 20 },
-    { key: 'infoDesign', label: '情報\n設計', max: 20 },
-    { key: 'brand',      label: 'ブランド\n整合性', max: 10 },
-    { key: 'technical',  label: '技術\n品質', max: 10 },
-  ];
-  const grid = document.getElementById('score-grid');
-  grid.innerHTML = cats.map(c => {
-    const v = s[c.key], pct = Math.round(v / c.max * 100);
-    const bc = pct >= 80 ? '#639922' : pct >= 60 ? '#EF9F27' : '#E24B4A';
-    return `<div class="score-card">
-      <div class="s-label">${c.label.replace('\n','<br>')}</div>
-      <div><span class="s-num">${v}</span><span class="s-max">/${c.max}</span></div>
-      <div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${bc}"></div></div>
-    </div>`;
-  }).join('');
-
-  const list = document.getElementById('feedback-list');
-  list.innerHTML = (r.feedback || []).map(f => {
-    const label = f.type === 'good' ? '◎ 良い点' : f.type === 'warn' ? '△ 改善' : '× 要修正';
-    return `<div class="feedback-item">
-      <span class="tag ${f.type}">${label}</span>
-      <div class="fb-text"><strong>${f.point}</strong>：${f.text}</div>
-    </div>`;
-  }).join('');
+  document.getElementById('result-card').innerHTML = markdownToHtml(r.markdown || '');
 }
 
 function reset() {
