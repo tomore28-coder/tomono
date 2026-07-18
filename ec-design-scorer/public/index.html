@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EC デザイン採点ツール</title>
+<title>デザイン添削&amp;アドバイスツール</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -26,7 +26,18 @@
   .page { max-width: 640px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
 
   h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
-  .subtitle { font-size: 14px; color: var(--text2); margin-bottom: 2rem; }
+  .subtitle { font-size: 14px; color: var(--text2); margin-bottom: 1.25rem; }
+
+  .encourage-box {
+    background: linear-gradient(135deg, #FFF8E7, #F0F7E6);
+    border: 1px solid #E8E0C8;
+    border-radius: var(--radius-lg);
+    padding: 1.1rem 1.3rem;
+    margin-bottom: 1.5rem;
+  }
+  .encourage-box p { font-size: 13.5px; line-height: 1.85; color: #5B6B45; margin: 0; }
+  .encourage-box p + p { margin-top: 8px; }
+  .encourage-box .eb-highlight { font-weight: 700; color: #5E7F34; }
 
   .upload-zone {
     border: 1.5px dashed var(--border);
@@ -110,8 +121,13 @@
 </head>
 <body>
 <div class="page">
-  <h1>EC デザイン採点ツール</h1>
-  <p class="subtitle">バナー・LPの画像をアップロードすると、AIが「デザイン基礎」「売れるデザイン」の2視点・14項目で採点し、問いかけ形式でアドバイスします</p>
+  <h1>デザイン添削&amp;アドバイスツール</h1>
+  <p class="subtitle">バナー・LP・印刷物などの画像をアップロードすると、AIが「デザイン基礎」「売れるデザイン」の2視点で採点し、問いかけ形式でアドバイスします</p>
+
+  <div class="encourage-box">
+    <p>これは、あなたのデザインの精度を上げるための壁打ちツールです。依頼者に素案を出す前に一度ここに通して、自分のデザインを見返してみましょう。気づいたことを1つ取り入れるだけで、デザインは確実に良くなります。</p>
+    <p class="eb-highlight">🌱 採点は"ダメ出し"ではなく"伸びしろ探し"。今日も1歩前進!</p>
+  </div>
 
   <div class="upload-zone" id="upload-zone">
     <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 16V8m0 0-3 3m3-3 3 3M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1"/></svg>
@@ -129,10 +145,13 @@
       <label for="type-select">制作物の種類</label>
       <select id="type-select">
         <option>バナー広告（楽天・Yahoo）</option>
+        <option>バナー</option>
         <option>LP（商品ページ全体）</option>
         <option>LP上部ファーストビュー</option>
+        <option>LP説明コンテンツ（FV以外の説得コンテンツ）</option>
         <option>商品サムネイル</option>
-        <option>SNSバナー</option>
+        <option>Amazon商品画像</option>
+        <option>印刷物（説明書・パッケージ・チラシ）</option>
       </select>
     </div>
     <div>
