@@ -144,32 +144,31 @@ export default async function handler(req, res) {
   const userPrompt = `制作物の種類：${designType}\n${context ? `ターゲット・商品情報：${context}` : ''}\nこのデザインを評価してください。`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'claude-sonnet-4-6',
         max_tokens: 4096,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: userPrompt },
-              { type: 'image_url', image_url: { url: `data:${imageType};base64,${imageBase64}` } }
-            ]
-          }
-        ]
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: imageType, data: imageBase64 } },
+            { type: 'text', text: userPrompt }
+          ]
+        }]
       })
     });
 
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || 'API error');
 
-    const text = data.choices?.[0]?.message?.content || '';
+    const text = data.content.map(i => i.text || '').join('');
     const markdown = text.trim().replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '');
     res.status(200).json({ markdown });
   } catch (err) {
