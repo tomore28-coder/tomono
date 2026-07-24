@@ -23,7 +23,54 @@
     --radius-lg: 14px;
   }
   body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-  .page { max-width: 640px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+  .layout {
+    max-width: 1040px; margin: 0 auto; padding: 2rem 1.25rem 4rem;
+    display: flex; align-items: flex-start; gap: 2rem;
+  }
+  .page { flex: 1 1 auto; max-width: 640px; min-width: 0; }
+
+  /* Sidebar: 採点項目の学習パネル(「一緒に上手くなる辞書」) */
+  .sidebar {
+    width: 260px; flex-shrink: 0;
+    position: sticky; top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.1rem 1.1rem 1.3rem;
+  }
+  .sidebar-toggle { display: none; }
+  .sidebar-lead {
+    font-size: 12.5px; line-height: 1.7; color: #5B6B45;
+    background: linear-gradient(135deg, #FFF8E7, #F0F7E6);
+    border: 1px solid #E8E0C8; border-radius: var(--radius);
+    padding: 10px 12px; margin-bottom: 1rem;
+  }
+  .sidebar-section-title {
+    font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text3); margin: 1.1rem 0 4px;
+  }
+  .sidebar-section-title:first-of-type { margin-top: 0; }
+  .acc-item { border-bottom: 1px solid var(--border); }
+  .acc-item:last-child { border-bottom: none; }
+  .acc-trigger {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: none; border: none; cursor: pointer; text-align: left;
+    font-size: 13px; font-weight: 600; color: var(--text);
+    padding: 9px 2px; font-family: inherit;
+  }
+  .acc-trigger .chevron { font-size: 10px; color: var(--text3); transition: transform .2s ease; flex-shrink: 0; }
+  .acc-item.open .acc-trigger .chevron { transform: rotate(180deg); }
+  .acc-panel { max-height: 0; overflow: hidden; transition: max-height .25s ease; }
+  .acc-item.open .acc-panel { max-height: 320px; }
+  .acc-panel-inner { padding: 0 2px 12px; font-size: 12.5px; line-height: 1.75; }
+  .acc-panel-inner p { margin: 0 0 5px; }
+  .acc-panel-inner p:last-child { margin-bottom: 0; }
+  .acc-panel-inner .ap-good { color: var(--green); }
+  .acc-panel-inner .ap-grow { color: var(--amber); }
+  .acc-panel-inner .ap-tip  { color: #5E7F34; }
 
   h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
   .subtitle { font-size: 14px; color: var(--text2); margin-bottom: 1.25rem; }
@@ -117,10 +164,174 @@
   @media (max-width: 480px) {
     .row { grid-template-columns: 1fr; }
   }
+
+  @media (max-width: 768px) {
+    .layout { flex-direction: column; gap: .75rem; padding: 1.5rem 1.25rem 3rem; }
+    .sidebar {
+      width: 100%; position: static; max-height: none; overflow: visible;
+      padding: 0; border: none; background: none;
+    }
+    .sidebar-toggle {
+      display: flex; align-items: center; justify-content: space-between; width: 100%;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 12px 14px; font-size: 14px; font-weight: 600; color: var(--text);
+      cursor: pointer; font-family: inherit;
+    }
+    .sidebar-toggle .chevron { font-size: 11px; color: var(--text3); transition: transform .2s ease; }
+    .sidebar.open .sidebar-toggle .chevron { transform: rotate(180deg); }
+    .sidebar-inner {
+      max-height: 0; overflow: hidden; transition: max-height .3s ease;
+      border: 1px solid var(--border); border-top: none;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+      background: var(--surface); padding: 0 1.1rem;
+    }
+    .sidebar.open .sidebar-inner { max-height: 2400px; padding: 1rem 1.1rem 1.2rem; }
+  }
 </style>
 </head>
 <body>
-<div class="page">
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-expanded="false" aria-controls="sidebar-inner">
+      <span>📖 採点項目の辞典を見る</span>
+      <span class="chevron">▾</span>
+    </button>
+    <div class="sidebar-inner" id="sidebar-inner">
+      <p class="sidebar-lead">採点で指摘された項目を、その場で読み返せる辞書です。「ダメ出しの基準表」ではなく、一緒に上手くなるための道具として気になったときにいつでも開いてください。</p>
+
+      <div class="sidebar-section-title">デザイン基礎</div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">文字詰め(カーニング)<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:文字と文字の間隔がそろって見え、単語のまとまりがすっと読める。</p>
+          <p class="ap-grow">まだ伸びしろ:特定の文字間だけ広すぎたり詰まりすぎたりして、読むときに引っかかる。</p>
+          <p class="ap-tip">🌱 気になる文字間だけ手動で詰めるだけでも印象が変わります。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">ジャンプ率<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:一番見せたい要素とそれ以外に、はっきりしたサイズ差がついている。</p>
+          <p class="ap-grow">まだ伸びしろ:要素の大きさが均一で、最初にどこを見ればいいか一瞬迷う。</p>
+          <p class="ap-tip">🌱 主役の要素を思い切って大きくしてみましょう。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">数字フォント<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:割引率や台数などの数字が、ひと目で「数字だ」と分かる強さで置かれている。</p>
+          <p class="ap-grow">まだ伸びしろ:数字が他の文字と同じ扱いで埋もれている、または数字がなく訴求が弱い。</p>
+          <p class="ap-tip">🌱 数字だけ太字・別書体にすると説得力が上がります。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">色のコントラスト<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:文字と背景、強調したい要素の色差がはっきりしていて読みやすい。</p>
+          <p class="ap-grow">まだ伸びしろ:似た色同士が重なって、文字や要素が背景に沈んで見える。</p>
+          <p class="ap-tip">🌱 一番伝えたい部分だけでも背景とのコントラストを強めてみましょう。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">文字の視認性<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:どのサイズの文字も、拡大しなくてもスラスラ読める太さ・大きさになっている。</p>
+          <p class="ap-grow">まだ伸びしろ:小さすぎる・細すぎる文字や、背景写真に埋もれて読みにくい文字がある。</p>
+          <p class="ap-tip">🌱 一番小さい文字を少し太く・大きくするだけで安心感が出ます。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">強調色と対比色<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:主役の色が1つに決まっていて、その他の色との対比がはっきりしている。</p>
+          <p class="ap-grow">まだ伸びしろ:色数が多く主役の色が定まらない、または対比が弱く目立たない。</p>
+          <p class="ap-tip">🌱 主役以外の彩度を少し落とすと、主役が自然に引き立ちます。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">視覚的な階層化<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:情報の優先順位が視線の流れ(大→小、上→下など)に沿って設計されている。</p>
+          <p class="ap-grow">まだ伸びしろ:すべての情報が同じ重みに見え、どこから読めばいいか分かりにくい。</p>
+          <p class="ap-tip">🌱 「3秒で一番伝えたいこと」を基準に優先順位を見直してみましょう。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">余白・整列<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:要素がきれいに揃い、余白によって情報のまとまりが自然に区切られている。</p>
+          <p class="ap-grow">まだ伸びしろ:要素が詰め込まれすぎている、またはガイドから微妙にずれている。</p>
+          <p class="ap-tip">🌱 一番窮屈に見える箇所の余白を広げるだけで整理された印象になります。</p>
+        </div></div>
+      </div>
+
+      <div class="sidebar-section-title">売れるデザイン</div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">訴求の説得力<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:商品カテゴリに合った訴求(数字での裏付け、または情緒的な共感)で語れている。</p>
+          <p class="ap-grow">まだ伸びしろ:機能系なのに数字が弱い、または感情系なのに数字ばかりで温度が感じられない。</p>
+          <p class="ap-tip">🌱 商品を選ぶ人の気持ちになって、何が響くタイプの商品か考えてみましょう。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">ベネフィット表現<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:機能の説明だけでなく、使った後の状態・体験がイメージできる言葉がある。</p>
+          <p class="ap-grow">まだ伸びしろ:スペックの羅列だけで、「使うとどうなるか」が伝わってこない。</p>
+          <p class="ap-tip">🌱 「◯◯な毎日に」のような体験ベースの一言を添えてみましょう。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">信頼要素<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:レビュー数・実績・認証マーク・公式表記など、不安に答える要素がある。</p>
+          <p class="ap-grow">まだ伸びしろ:初めて見る人が感じる不安に、デザイン内で何も答えていない。</p>
+          <p class="ap-tip">🌱 小さくてもいいので実績数やレビュー評価を一つ入れてみましょう。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">緊急性・限定性<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:期間限定・数量限定などの後押しが、根拠とセットで示されている。</p>
+          <p class="ap-grow">まだ伸びしろ:「限定」「今だけ」等の表記があるのに期限や根拠が書かれていない。</p>
+          <p class="ap-tip">🌱 実在する期限か必ず確認し、具体的な日付や数量を添えましょう。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">シーン提示<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:使うシーンやターゲットが「自分ごと」として想像できる写真・表現がある。</p>
+          <p class="ap-grow">まだ伸びしろ:商品単体の説明だけで、使っている場面が想像しにくい。</p>
+          <p class="ap-tip">🌱 ターゲットが商品を使っている瞬間を1カット加えてみましょう。</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-trigger" type="button">TTP適合<span class="chevron">▾</span></button>
+        <div class="acc-panel"><div class="acc-panel-inner">
+          <p class="ap-good">できている:売れているデザインの型(構成・要素配置)を踏まえた、安心感のある構成になっている。</p>
+          <p class="ap-grow">まだ伸びしろ:独自の構成にこだわりすぎて、見る人が情報を探すのに苦労している。</p>
+          <p class="ap-tip">🌱 気になる売れ筋デザインを1つ見つけて、構成だけ真似してみましょう。</p>
+        </div></div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="page">
   <h1>デザイン添削&amp;アドバイスツール</h1>
   <p class="subtitle">バナー・LP・印刷物などの画像をアップロードすると、AIが「デザイン基礎」「売れるデザイン」の2視点で採点し、問いかけ形式でアドバイスします</p>
 
@@ -172,6 +383,7 @@
   <div id="score-content">
     <div class="result-card" id="result-card"></div>
     <button class="btn-retry" onclick="reset()">別の画像を採点する</button>
+  </div>
   </div>
 </div>
 
@@ -277,6 +489,20 @@ function reset() {
   submitBtn.disabled = true;
   document.getElementById('context-input').value = '';
 }
+
+// 学習パネル(サイドバー): モバイルでは折りたたみパネル、各項目はアコーディオン
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebar-toggle');
+sidebarToggle.addEventListener('click', () => {
+  const isOpen = sidebar.classList.toggle('open');
+  sidebarToggle.setAttribute('aria-expanded', String(isOpen));
+});
+
+document.querySelectorAll('.acc-trigger').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.closest('.acc-item').classList.toggle('open');
+  });
+});
 </script>
 </body>
 </html>
