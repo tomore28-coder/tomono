@@ -161,6 +161,21 @@
   .btn-retry { font-size: 14px; padding: 9px 20px; border-radius: var(--radius); cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
   .btn-retry:hover { background: var(--surface2); }
 
+  .download-row { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .btn-download {
+    flex: 1 1 160px; min-height: 46px;
+    font-size: 13.5px; font-weight: 600; font-family: inherit;
+    padding: 11px 14px; border-radius: var(--radius);
+    cursor: pointer; text-align: center;
+    border: 1px solid #E8E0C8;
+    background: linear-gradient(135deg, #FFF8E7, #F0F7E6);
+    color: #5E7F34;
+    transition: opacity .15s, transform .1s;
+  }
+  .btn-download:hover { opacity: .85; }
+  .btn-download:active { transform: scale(.98); }
+  .btn-download:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
   @media (max-width: 480px) {
     .row { grid-template-columns: 1fr; }
   }
@@ -382,13 +397,20 @@
 
   <div id="score-content">
     <div class="result-card" id="result-card"></div>
+    <div class="download-row">
+      <button class="btn-download" id="btn-download-text" type="button">📝 テキストで保存</button>
+      <button class="btn-download" id="btn-download-image" type="button">🖼️ 画像で保存</button>
+    </div>
     <button class="btn-retry" onclick="reset()">別の画像を採点する</button>
   </div>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 let imageBase64 = null, imageType = 'image/jpeg';
+let lastMarkdown = '';
+let lastDesignType = '';
 
 const uploadZone = document.getElementById('upload-zone');
 const fileInput  = document.getElementById('file-input');
@@ -430,6 +452,7 @@ async function analyze() {
   loading.style.display = 'block';
   scoreContent.style.display = 'none';
   errorMsg.style.display = 'none';
+  lastDesignType = document.getElementById('type-select').value;
 
   try {
     const res = await fetch('/api/score', {
@@ -437,7 +460,7 @@ async function analyze() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         imageBase64, imageType,
-        designType: document.getElementById('type-select').value,
+        designType: lastDesignType,
         context: document.getElementById('context-input').value
       })
     });
@@ -478,7 +501,8 @@ function markdownToHtml(md) {
 
 function renderResult(r) {
   scoreContent.style.display = 'block';
-  document.getElementById('result-card').innerHTML = markdownToHtml(r.markdown || '');
+  lastMarkdown = r.markdown || '';
+  document.getElementById('result-card').innerHTML = markdownToHtml(lastMarkdown);
 }
 
 function reset() {
@@ -488,7 +512,71 @@ function reset() {
   errorMsg.style.display = 'none';
   submitBtn.disabled = true;
   document.getElementById('context-input').value = '';
+  lastMarkdown = '';
+  lastDesignType = '';
 }
+
+// 採点結果のダウンロード(テキスト保存 / 画像保存)
+function sanitizeFilenamePart(s) {
+  return (s || '').replace(/[\\/:*?"<>|]/g, '').trim();
+}
+
+function buildDownloadFilename(ext) {
+  const d = new Date();
+  const date = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const type = sanitizeFilenamePart(lastDesignType) || 'デザイン';
+  return `採点結果_${date}_${type}.${ext}`;
+}
+
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadResultText() {
+  if (!lastMarkdown) return;
+  const blob = new Blob([lastMarkdown], { type: 'text/markdown;charset=utf-8' });
+  triggerBlobDownload(blob, buildDownloadFilename('md'));
+}
+
+async function downloadResultImage() {
+  if (typeof html2canvas === 'undefined') {
+    errorMsg.textContent = '画像保存の準備に失敗しました。通信環境を確認し、ページを再読み込みしてお試しください。';
+    errorMsg.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('btn-download-image');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '画像を作成中...';
+  try {
+    const canvas = await html2canvas(document.getElementById('result-card'), {
+      backgroundColor: '#ffffff',
+      scale: 2
+    });
+    await new Promise(resolve => {
+      canvas.toBlob(blob => {
+        if (blob) triggerBlobDownload(blob, buildDownloadFilename('png'));
+        resolve();
+      });
+    });
+  } catch (err) {
+    errorMsg.textContent = '画像の作成に失敗しました: ' + err.message;
+    errorMsg.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+document.getElementById('btn-download-text').addEventListener('click', downloadResultText);
+document.getElementById('btn-download-image').addEventListener('click', downloadResultImage);
 
 // 学習パネル(サイドバー): モバイルでは折りたたみパネル、各項目はアコーディオン
 const sidebar = document.getElementById('sidebar');
