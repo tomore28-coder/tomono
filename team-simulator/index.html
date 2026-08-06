@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>チーム配置シミュレーター</title>
+<style>
+  :root{
+    --bg:#f6f4ef;
+    --panel:#fffdf9;
+    --panel-border:#e4ddcf;
+    --ink:#3a352c;
+    --ink-soft:#7a7364;
+    --accent:#8a6d4c;
+    --accent-dark:#5f4a30;
+    --accent-soft:#eee3d2;
+    --green:#5b9279;
+    --green-bg:#e4efe8;
+    --yellow:#c69a3d;
+    --yellow-bg:#f6ecd6;
+    --red:#bd5b4c;
+    --red-bg:#f6e2dd;
+    --gray:#9a958a;
+    --gray-bg:#ececE6;
+    --shadow: 0 2px 10px rgba(90,74,48,0.08);
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Hiragino Sans","Yu Gothic","Noto Sans JP",-apple-system,BlinkMacSystemFont,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    line-height:1.6;
+    padding-bottom:60px;
+  }
+  header{
+    padding:22px 20px 14px;
+    background:linear-gradient(180deg, #fffefb 0%, #f6f4ef 100%);
+    border-bottom:1px solid var(--panel-border);
+  }
+  header h1{
+    margin:0 0 4px;
+    font-size:1.35rem;
+    font-weight:700;
+    color:var(--accent-dark);
+    letter-spacing:.02em;
+  }
+  header p{
+    margin:0;
+    font-size:.85rem;
+    color:var(--ink-soft);
+  }
+  .container{
+    max-width:1180px;
+    margin:0 auto;
+    padding:18px 16px 0;
+  }
+  .toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  button{
+    font-family:inherit;
+    cursor:pointer;
+    border-radius:999px;
+    border:1px solid var(--panel-border);
+    background:var(--panel);
+    color:var(--ink);
+    padding:8px 16px;
+    font-size:.82rem;
+    transition:all .15s ease;
+    white-space:nowrap;
+  }
+  button:hover{ border-color:var(--accent); color:var(--accent-dark); box-shadow:var(--shadow);}
+  button.primary{ background:var(--accent); color:#fff; border-color:var(--accent);}
+  button.primary:hover{ background:var(--accent-dark); border-color:var(--accent-dark); color:#fff;}
+  button.ghost{ background:transparent; }
+  button.danger{ color:var(--red); border-color:#e6c9c2;}
+  button.danger:hover{ background:var(--red-bg); border-color:var(--red);}
+  button.small{ padding:5px 12px; font-size:.75rem;}
+  .layout{
+    display:grid;
+    grid-template-columns: minmax(0,1.4fr) minmax(280px,0.9fr);
+    gap:18px;
+    align-items:start;
+  }
+  @media (max-width: 920px){
+    .layout{ grid-template-columns: 1fr; }
+  }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:16px;
+    margin-bottom:18px;
+  }
+  .panel h2{
+    margin:0 0 10px;
+    font-size:1rem;
+    color:var(--accent-dark);
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .panel h2 .sub{
+    font-size:.72rem;
+    font-weight:400;
+    color:var(--ink-soft);
+  }
+  .axis-editor{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+    font-size:.78rem;
+    color:var(--ink-soft);
+    margin-bottom:10px;
+  }
+  .axis-editor label{ display:flex; align-items:center; gap:6px; }
+  .axis-editor input[type=text]{
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    padding:4px 8px;
+    font-size:.78rem;
+    font-family:inherit;
+    width:110px;
+    background:#fff;
+  }
+  #mapWrap{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1;
+    max-height:640px;
+    margin:0 auto;
+    touch-action:none;
+  }
+  svg#map{
+    width:100%;
+    height:100%;
+    display:block;
+    border-radius:10px;
+    background:#fffefb;
+  }
+  .legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    font-size:.75rem;
+    color:var(--ink-soft);
+    margin-top:10px;
+  }
+  .legend span{ display:inline-flex; align-items:center; gap:5px;}
+  .dot{ width:10px;height:10px;border-radius:50%; display:inline-block;}
+  .dot.green{background:var(--green);} .dot.yellow{background:var(--yellow);}
+  .dot.red{background:var(--red);} .dot.gray{background:var(--gray);}
+  .dot.candidate{ background:transparent; border:2px dashed var(--accent); }
+
+  /* member list */
+  .member-list{ display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto; }
+  .member-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 10px; border:1px solid var(--panel-border); border-radius:10px;
+    background:#fffefb; font-size:.82rem; cursor:pointer;
+  }
+  .member-row:hover{ border-color:var(--accent); }
+  .member-row .name{ display:flex; align-items:center; gap:8px; }
+  .member-row .status-dot{ width:9px;height:9px;border-radius:50%; flex-shrink:0;}
+  .member-row .tag{ font-size:.68rem; color:var(--ink-soft);}
+
+  /* detail panel / form */
+  .field{ margin-bottom:10px; }
+  .field label{ display:block; font-size:.72rem; color:var(--ink-soft); margin-bottom:3px;}
+  .field input[type=text], .field textarea, .field select{
+    width:100%; border:1px solid var(--panel-border); border-radius:8px;
+    padding:7px 9px; font-size:.85rem; font-family:inherit; background:#fff; color:var(--ink);
+  }
+  .field textarea{ resize:vertical; min-height:44px;}
+  .field-row{ display:flex; gap:10px; }
+  .field-row .field{ flex:1; }
+  .status-select{ display:flex; gap:6px; flex-wrap:wrap; }
+  .status-opt{
+    flex:1; min-width:56px; text-align:center; padding:6px 4px; border-radius:8px;
+    border:1.5px solid var(--panel-border); font-size:.72rem; cursor:pointer; color:var(--ink-soft);
+  }
+  .status-opt.sel-green.active{ background:var(--green-bg); border-color:var(--green); color:#2f5c46;}
+  .status-opt.sel-yellow.active{ background:var(--yellow-bg); border-color:var(--yellow); color:#7a5a12;}
+  .status-opt.sel-red.active{ background:var(--red-bg); border-color:var(--red); color:#7c3225;}
+  .status-opt.sel-gray.active{ background:var(--gray-bg); border-color:var(--gray); color:#55524a;}
+  .form-actions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+
+  .preset-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  @media (max-width:520px){ .preset-grid{ grid-template-columns:1fr; } }
+  .preset-btn{
+    text-align:left; padding:10px 12px; border-radius:10px; border:1px solid var(--panel-border);
+    background:#fffefb; font-size:.78rem; line-height:1.4;
+  }
+  .preset-btn b{ display:block; font-size:.82rem; color:var(--accent-dark); margin-bottom:2px;}
+  .preset-btn:hover{ border-color:var(--accent); box-shadow:var(--shadow); }
+
+  .quadrant-badges{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .qbadge{
+    border-radius:10px; padding:10px; font-size:.76rem; border:1px solid var(--panel-border);
+    background:#fffefb;
+  }
+  .qbadge .qtitle{ font-weight:700; font-size:.78rem; color:var(--accent-dark); margin-bottom:4px; }
+  .qbadge .qcount{ font-size:1.1rem; font-weight:700; }
+  .qbadge.empty{ background:var(--red-bg); border-color:#e6c9c2; }
+  .qbadge.thin{ background:var(--yellow-bg); border-color:#e8d6a3; }
+  .qbadge.ok{ background:var(--green-bg); border-color:#cfe3d7; }
+
+  .report-block{ font-size:.85rem; }
+  .report-block h3{
+    font-size:.82rem; color:var(--accent-dark); margin:14px 0 6px; display:flex; align-items:center; gap:6px;
+  }
+  .report-block h3:first-child{ margin-top:0; }
+  .report-block ul{ margin:0; padding-left:18px; }
+  .report-block li{ margin-bottom:4px; }
+  .highlight-box{
+    background:var(--accent-soft); border:1px solid #ddc9a8; border-radius:10px;
+    padding:10px 12px; font-size:.85rem; margin:8px 0;
+  }
+  .empty-state{ color:var(--ink-soft); font-size:.82rem; padding:14px 4px; text-align:center; }
+
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(58,53,44,0.35);
+    display:flex; align-items:center; justify-content:center; z-index:50; padding:16px;
+  }
+  .modal{
+    background:var(--panel); border-radius:16px; padding:20px; width:100%; max-width:420px;
+    max-height:88vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.2);
+  }
+  .modal h3{ margin-top:0; color:var(--accent-dark); }
+  .hidden{ display:none !important; }
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:var(--accent-dark); color:#fff; padding:9px 18px; border-radius:999px;
+    font-size:.8rem; box-shadow:0 4px 14px rgba(0,0,0,0.2); z-index:80; opacity:0; pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(-4px); }
+  footer{ text-align:center; font-size:.72rem; color:var(--ink-soft); padding:30px 10px 10px; }
+  .file-input{ display:none; }
+  .zone-note{ font-size:.72rem; color:var(--ink-soft); margin-top:6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container" style="padding-top:0;padding-bottom:0;">
+    <h1>チーム配置シミュレーター</h1>
+    <p>デザインチームの人員配置を可視化し、採用による組織変化をシミュレーションします。</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="toolbar">
+    <button class="primary" id="btnAddMember">＋ メンバーを追加</button>
+    <button id="btnExport">エクスポート</button>
+    <button id="btnImport">インポート</button>
+    <input type="file" id="fileInput" class="file-input" accept="application/json">
+    <button class="danger" id="btnReset">リセット</button>
+  </div>
+
+  <div class="layout">
+    <!-- LEFT: MAP -->
+    <div>
+      <div class="panel">
+        <h2>2軸マップ <span class="sub">点をドラッグして配置を調整できます</span></h2>
+        <div class="axis-editor">
+          <label>横軸 左: <input type="text" id="axisLeft" value="クリエイティブ"></label>
+          <label>右: <input type="text" id="axisRight" value="数字"></label>
+          <label>縦軸 下: <input type="text" id="axisBottom" value="プレイヤー"></label>
+          <label>上: <input type="text" id="axisTop" value="マネジメント"></label>
+        </div>
+        <div id="mapWrap">
+          <svg id="map" viewBox="0 0 600 600"></svg>
+        </div>
+        <div class="legend">
+          <span><span class="dot green"></span>余力あり</span>
+          <span><span class="dot yellow"></span>やや飽和</span>
+          <span><span class="dot red"></span>飽和</span>
+          <span><span class="dot gray"></span>不明</span>
+          <span><span class="dot candidate"></span>採用候補(点線)</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>チームの穴の指摘 <span class="sub">常時判定</span></h2>
+        <div class="quadrant-badges" id="quadrantBadges"></div>
+        <div class="zone-note" id="zoneNote"></div>
+      </div>
+
+      <div class="panel" id="reportPanel">
+        <h2>変化レポート <span class="sub">候補を配置すると自動更新</span></h2>
+        <div id="reportContent" class="report-block">
+          <div class="empty-state">まだ採用候補が配置されていません。右側の「採用シミュレーション」から候補を置くと、変化レポートが表示されます。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: SIDEBAR -->
+    <div>
+      <div class="panel">
+        <h2>メンバー一覧</h2>
+        <div class="member-list" id="memberList"></div>
+      </div>
+
+      <div class="panel">
+        <h2>採用シミュレーション</h2>
+        <div class="preset-grid" id="presetGrid"></div>
+        <div class="form-actions" style="margin-top:10px;">
+          <button class="danger small" id="btnClearCandidates">候補をすべて消す</button>
+        </div>
+      </div>
+
+      <div class="panel hidden" id="detailPanel">
+        <h2 id="detailTitle">詳細</h2>
+        <div id="detailBody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>データはこの端末のブラウザ内にのみ保存されます。サーバー送信は行いません。</footer>
+
+<div class="toast" id="toast"></div>
+
+<!-- Edit Modal -->
+<div class="modal-backdrop hidden" id="editModal">
+  <div class="modal">
+    <h3 id="modalTitle">メンバーを編集</h3>
+    <div class="field">
+      <label>名前</label>
+      <input type="text" id="f_name" placeholder="例: 山田">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label id="f_xLabel">横軸値 (0-100)</label>
+        <input type="text" inputmode="numeric" id="f_x" placeholder="0-100">
+      </div>
+      <div class="field">
+        <label id="f_yLabel">縦軸値 (0-100)</label>
+        <input type="text" inputmode="numeric" id="f_y" placeholder="0-100">
+      </div>
+    </div>
+    <div class="field">
+      <label>稼働状況</label>
+      <div class="status-select" id="statusSelect">
+        <div class="status-opt sel-green" data-status="green">緑・余力</div>
+        <div class="status-opt sel-yellow" data-status="yellow">黄・やや飽和</div>
+        <div class="status-opt sel-red" data-status="red">赤・飽和</div>
+        <div class="status-opt sel-gray" data-status="gray">グレー・不明</div>
+      </div>
+    </div>
+    <div class="field">
+      <label>強み</label>
+      <input type="text" id="f_strength" placeholder="例: 0→1表現・調整力">
+    </div>
+    <div class="field">
+      <label>志向</label>
+      <input type="text" id="f_orientation" placeholder="例: クリエイティブ統括">
+    </div>
+    <div class="field">
+      <label>育成メモ (任意)</label>
+      <textarea id="f_memo" placeholder="任意のメモ"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="primary" id="btnSaveMember">保存</button>
+      <button class="ghost" id="btnCancelModal">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "team-simulator-data-v1";
+
+  var STATUS_COLORS = {
+    green: getCss("--green"), yellow: getCss("--yellow"),
+    red: getCss("--red"), gray: getCss("--gray")
+  };
+  var STATUS_LABEL = { green:"余力あり", yellow:"やや飽和", red:"飽和", gray:"不明" };
+
+  function getCss(v){
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  }
+
+  function uid(){ return "m_" + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+  function defaultData(){
+    return {
+      axis: { left:"クリエイティブ", right:"数字", bottom:"プレイヤー", top:"マネジメント" },
+      members: [
+        { id: uid(), name:"安井", x:75, y:60, status:"red", strength:"スキル最高・数字分析・論理的設計", orientation:"数字改善リーダー", memo:"統括は2年後可能性・稼働飽和", candidate:false },
+        { id: uid(), name:"柳", x:30, y:65, status:"red", strength:"0→1表現・人を回す・調整", orientation:"クリエイティブ統括・プロダクト全体", memo:"稼働飽和・数字は興味薄", candidate:false },
+        { id: uid(), name:"久本", x:40, y:25, status:"yellow", strength:"制作の精度・スピード・細部の気づき", orientation:"慎重・自律性を育成中", memo:"疲弊気味・小さな判断を積む", candidate:false },
+        { id: uid(), name:"八木", x:30, y:20, status:"green", strength:"表現欲・発想・成長中", orientation:"一連の制作経験を希望", memo:"余力あり・意欲最高潮", candidate:false },
+        { id: uid(), name:"鈴村", x:50, y:55, status:"gray", strength:"課題発見力・視野の広さ", orientation:"未確定", memo:"評価はこれから", candidate:false },
+        { id: uid(), name:"伴野(Rei)", x:70, y:85, status:"red", strength:"戦略・仕組み化・育成", orientation:"ディレクションを手放したい", memo:"現ディレクター", candidate:false }
+      ]
+    };
+  }
+
+  var data = loadData();
+  var selectedId = null;
+  var editingId = null; // null = new member
+  var dragging = null;
+
+  function loadData(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return defaultData();
+      var parsed = JSON.parse(raw);
+      if(!parsed.axis || !parsed.members) return defaultData();
+      return parsed;
+    }catch(e){
+      return defaultData();
+    }
+  }
+
+  function saveData(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  function toast(msg){
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(function(){ t.classList.remove("show"); }, 2200);
+  }
+
+  /* ---------------- Axis labels ---------------- */
+  var axisLeft = document.getElementById("axisLeft");
+  var axisRight = document.getElementById("axisRight");
+  var axisBottom = document.getElementById("axisBottom");
+  var axisTop = document.getElementById("axisTop");
+
+  function refreshAxisInputs(){
+    axisLeft.value = data.axis.left;
+    axisRight.value = data.axis.right;
+    axisBottom.value = data.axis.bottom;
+    axisTop.value = data.axis.top;
+  }
+  [axisLeft, axisRight, axisBottom, axisTop].forEach(function(input){
+    input.addEventListener("input", function(){
+      data.axis.left = axisLeft.value || "左";
+      data.axis.right = axisRight.value || "右";
+      data.axis.bottom = axisBottom.value || "下";
+      data.axis.top = axisTop.value || "上";
+      saveData();
+      renderMap();
+      renderQuadrants();
+    });
+  });
+
+  /* ---------------- SVG Map ---------------- */
+  var svgNS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("map");
+  var VB = 600;
+  var PAD = 46;
+
+  function toSvgX(x){ return PAD + (x/100) * (VB - PAD*2); }
+  function toSvgY(y){ return (VB - PAD) - (y/100) * (VB - PAD*2); }
+  function fromSvgX(px){ return clamp(Math.round(((px - PAD) / (VB - PAD*2)) * 100), 0, 100); }
+  function fromSvgY(py){ return clamp(Math.round((((VB - PAD) - py) / (VB - PAD*2)) * 100), 0, 100); }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function el(tag, attrs){
+    var e = document.createElementNS(svgNS, tag);
+    for(var k in attrs){ e.setAttribute(k, attrs[k]); }
+    return e;
+  }
+
+  function renderMap(){
+    svg.innerHTML = "";
+    svg.setAttribute("viewBox", "0 0 " + VB + " " + VB);
+
+    var mid = VB/2;
+    var plotMin = PAD, plotMax = VB - PAD;
+
+    // quadrant backgrounds
+    var qColors = ["#f3ede0","#eef1e9","#efe9df","#f6efe3"];
+    svg.appendChild(el("rect",{x:plotMin,y:plotMin,width:mid-plotMin,height:mid-plotMin,fill:"#eef1e9",opacity:0.55})); // top-left
+    svg.appendChild(el("rect",{x:mid,y:plotMin,width:plotMax-mid,height:mid-plotMin,fill:"#f6ecd3",opacity:0.6})); // top-right (統括候補ゾーン)
+    svg.appendChild(el("rect",{x:plotMin,y:mid,width:mid-plotMin,height:plotMax-mid,fill:"#f3ede0",opacity:0.45})); // bottom-left
+    svg.appendChild(el("rect",{x:mid,y:mid,width:plotMax-mid,height:plotMax-mid,fill:"#efe9df",opacity:0.45})); // bottom-right
+
+    // outer border
+    svg.appendChild(el("rect",{x:plotMin,y:plotMin,width:plotMax-plotMin,height:plotMax-plotMin,fill:"none",stroke:"#ddd3bf","stroke-width":1.2}));
+
+    // center lines
+    svg.appendChild(el("line",{x1:mid,y1:plotMin,x2:mid,y2:plotMax,stroke:"#ddd3bf","stroke-width":1,"stroke-dasharray":"4,4"}));
+    svg.appendChild(el("line",{x1:plotMin,y1:mid,x2:plotMax,y2:mid,stroke:"#ddd3bf","stroke-width":1,"stroke-dasharray":"4,4"}));
+
+    // 統括候補ゾーン label (top-right)
+    var zoneLabel = el("text",{x:plotMax-8,y:plotMin+22,"text-anchor":"end","font-size":"13","font-weight":"700",fill:"#a5793c"});
+    zoneLabel.textContent = "統括候補ゾーン";
+    svg.appendChild(zoneLabel);
+    var zoneRect = el("rect",{x:mid+ (plotMax-mid)*0.15, y:plotMin, width:(plotMax-mid)*0.85, height:(mid-plotMin)*0.55, fill:"none", stroke:"#c9a25a","stroke-width":1,"stroke-dasharray":"3,3", opacity:0.7});
+    svg.appendChild(zoneRect);
+
+    // axis labels
+    function axisText(x,y,anchor,txt,weight){
+      var t = el("text",{x:x,y:y,"text-anchor":anchor,"font-size":"13",fill:"#6b6354","font-weight":weight||"600"});
+      t.textContent = txt;
+      svg.appendChild(t);
+    }
+    axisText(plotMin+2, VB-14, "start", "← " + data.axis.left);
+    axisText(plotMax-2, VB-14, "end", data.axis.right + " →");
+    axisText(plotMin-8, plotMin+4, "start", "↑ " + data.axis.top);
+    var g2 = el("text",{x:plotMin-8,y:plotMax,"text-anchor":"start","font-size":"13",fill:"#6b6354","font-weight":"600"});
+    g2.textContent = "↓ " + data.axis.bottom;
+    svg.appendChild(g2);
+
+    // points
+    var allPoints = data.members;
+    allPoints.forEach(function(m){
+      var cx = toSvgX(m.x), cy = toSvgY(m.y);
+      var color = STATUS_COLORS[m.status] || STATUS_COLORS.gray;
+      var g = el("g",{ "data-id": m.id, style:"cursor:pointer;" });
+
+      var r = m.candidate ? 15 : 14;
+      var circle = el("circle",{cx:cx, cy:cy, r:r, fill: m.candidate ? "#fffefb" : color,
+        stroke: color, "stroke-width": m.candidate ? 2.4 : 1.5,
+        "stroke-dasharray": m.candidate ? "5,4" : "none", opacity: m.candidate ? 0.95 : 1 });
+      g.appendChild(circle);
+
+      if(selectedId === m.id){
+        var ring = el("circle",{cx:cx, cy:cy, r:r+5, fill:"none", stroke:"#8a6d4c", "stroke-width":2, "stroke-dasharray":"2,3"});
+        g.appendChild(ring);
+      }
+
+      var label = el("text",{x:cx, y:cy+r+15, "text-anchor":"middle", "font-size":"12.5", fill:"#4a4436", "font-weight": m.candidate ? "600":"500"});
+      label.textContent = m.name + (m.candidate ? "(候補)" : "");
+      g.appendChild(label);
+
+      g.addEventListener("pointerdown", function(ev){
+        ev.preventDefault();
+        dragging = { id: m.id, pointerId: ev.pointerId };
+        svg.setPointerCapture(ev.pointerId);
+        selectedId = m.id;
+        renderAll();
+      });
+      g.addEventListener("click", function(ev){
+        ev.stopPropagation();
+      });
+
+      svg.appendChild(g);
+    });
+
+    svg.onpointermove = function(ev){
+      if(!dragging) return;
+      var rect = svg.getBoundingClientRect();
+      var scale = VB / rect.width;
+      var px = (ev.clientX - rect.left) * scale;
+      var py = (ev.clientY - rect.top) * scale;
+      var m = findMember(dragging.id);
+      if(!m) return;
+      m.x = fromSvgX(px);
+      m.y = fromSvgY(py);
+      renderMap();
+      if(editingId === null && selectedId === m.id){
+        updateDetailValuesOnly(m);
+      }
+    };
+    function endDrag(){
+      if(dragging){ saveData(); dragging = null; renderAll(); }
+    }
+    svg.onpointerup = endDrag;
+    svg.onpointercancel = endDrag;
+
+    svg.onclick = function(ev){
+      if(ev.target === svg){
+        selectedId = null;
+        renderAll();
+      }
+    };
+  }
+
+  function findMember(id){
+    return data.members.find(function(m){ return m.id === id; });
+  }
+
+  /* ---------------- Member list ---------------- */
+  function renderMemberList(){
+    var list = document.getElementById("memberList");
+    list.innerHTML = "";
+    if(data.members.length === 0){
+      list.innerHTML = '<div class="empty-state">メンバーがいません。追加してください。</div>';
+      return;
+    }
+    data.members.forEach(function(m){
+      var row = document.createElement("div");
+      row.className = "member-row";
+      row.innerHTML =
+        '<span class="name"><span class="status-dot" style="background:' + (STATUS_COLORS[m.status]||STATUS_COLORS.gray) + '"></span>' +
+        escapeHtml(m.name) + (m.candidate ? ' <span class="tag">(候補)</span>' : '') + '</span>' +
+        '<span class="tag">' + m.x + ' / ' + m.y + '</span>';
+      row.addEventListener("click", function(){
+        selectedId = m.id;
+        renderAll();
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function escapeHtml(str){
+    var d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
+
+  /* ---------------- Detail Panel ---------------- */
+  function renderDetail(){
+    var panel = document.getElementById("detailPanel");
+    var body = document.getElementById("detailBody");
+    var title = document.getElementById("detailTitle");
+    if(!selectedId){
+      panel.classList.add("hidden");
+      return;
+    }
+    var m = findMember(selectedId);
+    if(!m){
+      panel.classList.add("hidden");
+      return;
+    }
+    panel.classList.remove("hidden");
+    title.textContent = m.name + (m.candidate ? "(採用候補)" : "");
+    body.innerHTML =
+      '<div class="field"><label>' + escapeHtml(data.axis.left) + ' ← → ' + escapeHtml(data.axis.right) + '</label><div>' + m.x + ' / 100</div></div>' +
+      '<div class="field"><label>' + escapeHtml(data.axis.bottom) + ' ← → ' + escapeHtml(data.axis.top) + '</label><div>' + m.y + ' / 100</div></div>' +
+      '<div class="field"><label>稼働状況</label><div>' + STATUS_LABEL[m.status] + '</div></div>' +
+      '<div class="field"><label>強み</label><div>' + escapeHtml(m.strength||"—") + '</div></div>' +
+      '<div class="field"><label>志向</label><div>' + escapeHtml(m.orientation||"—") + '</div></div>' +
+      '<div class="field"><label>メモ</label><div>' + escapeHtml(m.memo||"—") + '</div></div>' +
+      '<div class="form-actions">' +
+        '<button class="small" id="btnEditThis">編集</button>' +
+        (m.candidate ? '<button class="small primary" id="btnConfirmCandidate">この候補を確定(実在メンバーに変換)</button><button class="small danger" id="btnRemoveCandidate">候補を消す</button>' :
+          '<button class="small danger" id="btnDeleteThis">削除</button>') +
+      '</div>';
+
+    var editBtn = document.getElementById("btnEditThis");
+    if(editBtn) editBtn.addEventListener("click", function(){ openEditModal(m.id); });
+    var delBtn = document.getElementById("btnDeleteThis");
+    if(delBtn) delBtn.addEventListener("click", function(){
+      if(confirm(m.name + "を削除しますか？")){
+        data.members = data.members.filter(function(x){ return x.id !== m.id; });
+        selectedId = null;
+        saveData();
+        renderAll();
+      }
+    });
+    var confirmBtn = document.getElementById("btnConfirmCandidate");
+    if(confirmBtn) confirmBtn.addEventListener("click", function(){
+      m.candidate = false;
+      saveData();
+      toast(m.name + "を実在メンバーに変換しました");
+      renderAll();
+    });
+    var removeBtn = document.getElementById("btnRemoveCandidate");
+    if(removeBtn) removeBtn.addEventListener("click", function(){
+      data.members = data.members.filter(function(x){ return x.id !== m.id; });
+      selectedId = null;
+      saveData();
+      renderAll();
+    });
+  }
+
+  function updateDetailValuesOnly(m){
+    // lightweight refresh while dragging (avoid full re-render flicker)
+    renderDetail();
+  }
+
+  /* ---------------- Edit Modal ---------------- */
+  var modal = document.getElementById("editModal");
+  var f_name = document.getElementById("f_name");
+  var f_x = document.getElementById("f_x");
+  var f_y = document.getElementById("f_y");
+  var f_strength = document.getElementById("f_strength");
+  var f_orientation = document.getElementById("f_orientation");
+  var f_memo = document.getElementById("f_memo");
+  var statusOpts = document.querySelectorAll(".status-opt");
+  var currentStatus = "gray";
+
+  statusOpts.forEach(function(opt){
+    opt.addEventListener("click", function(){
+      currentStatus = opt.getAttribute("data-status");
+      statusOpts.forEach(function(o){ o.classList.remove("active"); });
+      opt.classList.add("active");
+    });
+  });
+
+  function openEditModal(id){
+    editingId = id || null;
+    document.getElementById("f_xLabel").textContent = data.axis.left + "軸 値 (0=" + data.axis.left + " / 100=" + data.axis.right + ")";
+    document.getElementById("f_yLabel").textContent = data.axis.bottom + "軸 値 (0=" + data.axis.bottom + " / 100=" + data.axis.top + ")";
+    if(id){
+      var m = findMember(id);
+      document.getElementById("modalTitle").textContent = "メンバーを編集";
+      f_name.value = m.name;
+      f_x.value = m.x;
+      f_y.value = m.y;
+      f_strength.value = m.strength || "";
+      f_orientation.value = m.orientation || "";
+      f_memo.value = m.memo || "";
+      currentStatus = m.status;
+    } else {
+      document.getElementById("modalTitle").textContent = "メンバーを追加";
+      f_name.value = "";
+      f_x.value = "50";
+      f_y.value = "50";
+      f_strength.value = "";
+      f_orientation.value = "";
+      f_memo.value = "";
+      currentStatus = "gray";
+    }
+    statusOpts.forEach(function(o){
+      o.classList.toggle("active", o.getAttribute("data-status") === currentStatus);
+    });
+    modal.classList.remove("hidden");
+  }
+
+  function closeModal(){
+    modal.classList.add("hidden");
+    editingId = null;
+  }
+
+  document.getElementById("btnCancelModal").addEventListener("click", closeModal);
+  document.getElementById("btnAddMember").addEventListener("click", function(){ openEditModal(null); });
+
+  document.getElementById("btnSaveMember").addEventListener("click", function(){
+    var name = f_name.value.trim();
+    if(!name){ alert("名前を入力してください"); return; }
+    var x = clamp(parseInt(f_x.value,10) || 0, 0, 100);
+    var y = clamp(parseInt(f_y.value,10) || 0, 0, 100);
+
+    if(editingId){
+      var m = findMember(editingId);
+      m.name = name; m.x = x; m.y = y; m.status = currentStatus;
+      m.strength = f_strength.value.trim();
+      m.orientation = f_orientation.value.trim();
+      m.memo = f_memo.value.trim();
+    } else {
+      var newM = {
+        id: uid(), name:name, x:x, y:y, status:currentStatus,
+        strength: f_strength.value.trim(), orientation: f_orientation.value.trim(),
+        memo: f_memo.value.trim(), candidate:false
+      };
+      data.members.push(newM);
+      selectedId = newM.id;
+    }
+    saveData();
+    closeModal();
+    renderAll();
+  });
+
+  /* ---------------- Quadrant analysis ---------------- */
+  function getQuadrant(m){
+    // 0: top-left (creative/mgmt), 1: top-right (number/mgmt = 統括候補ゾーン)
+    // 2: bottom-left (creative/player), 3: bottom-right (number/player)
+    var right = m.x >= 50, top = m.y >= 50;
+    if(top && !right) return 0;
+    if(top && right) return 1;
+    if(!top && !right) return 2;
+    return 3;
+  }
+
+  var QUADRANT_NAMES = [
+    function(){ return data.axis.left + "×" + data.axis.top; },
+    function(){ return data.axis.right + "×" + data.axis.top + "(統括候補ゾーン)"; },
+    function(){ return data.axis.left + "×" + data.axis.bottom; },
+    function(){ return data.axis.right + "×" + data.axis.bottom; }
+  ];
+
+  function quadrantCounts(members){
+    var counts = [0,0,0,0];
+    members.forEach(function(m){ counts[getQuadrant(m)]++; });
+    return counts;
+  }
+
+  function renderQuadrants(){
+    var real = data.members.filter(function(m){ return !m.candidate; });
+    var counts = quadrantCounts(real);
+    var box = document.getElementById("quadrantBadges");
+    box.innerHTML = "";
+    var order = [0,1,2,3];
+    order.forEach(function(qi){
+      var c = counts[qi];
+      var cls = c === 0 ? "empty" : (c === 1 ? "thin" : "ok");
+      var div = document.createElement("div");
+      div.className = "qbadge " + cls;
+      div.innerHTML = '<div class="qtitle">' + QUADRANT_NAMES[qi]() + '</div><div class="qcount">' + c + '名</div>';
+      box.appendChild(div);
+    });
+
+    var zoneMembers = real.filter(function(m){ return getQuadrant(m) === 1; });
+    var note = document.getElementById("zoneNote");
+    if(zoneMembers.length === 0){
+      note.innerHTML = "⚠ 現在、統括候補ゾーン(" + data.axis.right + "×" + data.axis.top + ")には誰もいません。組織の意思決定・数字統括を担える人材が手薄です。";
+    } else {
+      // find closest to the ideal corner (100,100)
+      var closest = zoneMembers.slice().sort(function(a,b){
+        var da = Math.hypot(100-a.x, 100-a.y), db = Math.hypot(100-b.x, 100-b.y);
+        return da - db;
+      })[0];
+      note.innerHTML = "統括候補ゾーンには " + zoneMembers.map(function(m){return escapeHtml(m.name);}).join("、") +
+        " がいます。最も近いのは「" + escapeHtml(closest.name) + "」(稼働: " + STATUS_LABEL[closest.status] + ")。";
+    }
+  }
+
+  /* ---------------- Presets (candidates) ---------------- */
+  var PRESETS = [
+    { key:"leader", label:"数字型リーダー候補", desc: "数字×マネジメント", x:78, y:80, status:"green" },
+    { key:"junior", label:"若手クリエイター候補", desc:"クリエイティブ×プレイヤー", x:22, y:22, status:"green" },
+    { key:"exec", label:"即戦力実務デザイナー候補", desc:"中央×プレイヤー・稼働余力大", x:50, y:22, status:"green" },
+    { key:"creative_lead", label:"クリエイティブ統括候補", desc:"クリエイティブ×マネジメント", x:22, y:80, status:"green" },
+    { key:"custom", label:"自由入力", desc:"任意の位置に配置", x:50, y:50, status:"gray" }
+  ];
+
+  function renderPresets(){
+    var grid = document.getElementById("presetGrid");
+    grid.innerHTML = "";
+    PRESETS.forEach(function(p){
+      var btn = document.createElement("button");
+      btn.className = "preset-btn";
+      btn.innerHTML = "<b>" + p.label + "</b>" + p.desc;
+      btn.addEventListener("click", function(){
+        if(p.key === "custom"){
+          var newM = { id: uid(), name:"候補", x:50, y:50, status:"gray", strength:"", orientation:"", memo:"", candidate:true };
+          data.members.push(newM);
+          selectedId = newM.id;
+          saveData();
+          renderAll();
+          openEditModal(newM.id);
+        } else {
+          var newM2 = { id: uid(), name:p.label, x:p.x, y:p.y, status:p.status, strength:"", orientation:p.desc, memo:"シミュレーション候補", candidate:true };
+          data.members.push(newM2);
+          selectedId = newM2.id;
+          saveData();
+          renderAll();
+        }
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  document.getElementById("btnClearCandidates").addEventListener("click", function(){
+    var hadCandidates = data.members.some(function(m){ return m.candidate; });
+    if(!hadCandidates) return;
+    data.members = data.members.filter(function(m){ return !m.candidate; });
+    selectedId = null;
+    saveData();
+    renderAll();
+  });
+
+  /* ---------------- Change Report ---------------- */
+  function centroid(members){
+    if(members.length === 0) return {x:50,y:50};
+    var sx=0, sy=0;
+    members.forEach(function(m){ sx += m.x; sy += m.y; });
+    return { x: sx/members.length, y: sy/members.length };
+  }
+
+  function statusCounts(members){
+    var c = {green:0, yellow:0, red:0, gray:0};
+    members.forEach(function(m){ c[m.status] = (c[m.status]||0) + 1; });
+    return c;
+  }
+
+  function renderReport(){
+    var content = document.getElementById("reportContent");
+    var candidates = data.members.filter(function(m){ return m.candidate; });
+    var real = data.members.filter(function(m){ return !m.candidate; });
+
+    if(candidates.length === 0){
+      content.innerHTML = '<div class="empty-state">まだ採用候補が配置されていません。右側の「採用シミュレーション」から候補を置くと、変化レポートが表示されます。</div>';
+      return;
+    }
+
+    var before = real;
+    var after = real.concat(candidates);
+
+    var beforeCounts = quadrantCounts(before);
+    var afterCounts = quadrantCounts(after);
+
+    var html = "";
+
+    // 1. distribution change
+    var filledQuadrants = [];
+    QUADRANT_NAMES.forEach(function(nameFn, qi){
+      if(beforeCounts[qi] === 0 && afterCounts[qi] > 0){
+        filledQuadrants.push(nameFn());
+      }
+    });
+    html += "<h3>① 分布の変化</h3><ul>";
+    if(filledQuadrants.length > 0){
+      html += "<li>これまで空白だった「" + filledQuadrants.map(escapeHtml).join("」「") + "」が埋まります。</li>";
+    } else {
+      html += "<li>候補は既存の分布があるゾーンに重なって配置されます(新たにゼロから埋まる象限はありません)。</li>";
+    }
+    var cent0 = centroid(before), cent1 = centroid(after);
+    var dx = (cent1.x - cent0.x).toFixed(1), dy = (cent1.y - cent0.y).toFixed(1);
+    html += "<li>チーム全体の重心は (" + cent0.x.toFixed(0) + "," + cent0.y.toFixed(0) + ") → (" + cent1.x.toFixed(0) + "," + cent1.y.toFixed(0) + ") に移動 " +
+      "(横方向 " + (dx>=0?"+":"") + dx + " / 縦方向 " + (dy>=0?"+":"") + dy + ")。";
+    if(Math.abs(dx) > Math.abs(dy)){
+      html += dx > 0 ? data.axis.right + "寄りへシフトします。" : data.axis.left + "寄りへシフトします。";
+    } else {
+      html += dy > 0 ? data.axis.top + "寄りへシフトします。" : data.axis.bottom + "寄りへシフトします。";
+    }
+    html += "</li></ul>";
+
+    // 2. quadrant balance before/after
+    html += "<h3>② 4象限バランス(前→後)</h3><ul>";
+    QUADRANT_NAMES.forEach(function(nameFn, qi){
+      html += "<li>" + nameFn() + "： " + beforeCounts[qi] + "名 → " + afterCounts[qi] + "名" +
+        (afterCounts[qi] > beforeCounts[qi] ? "(+" + (afterCounts[qi]-beforeCounts[qi]) + ")" : "") + "</li>";
+    });
+    html += "</ul>";
+
+    // 3. 統括候補ゾーン充足判定
+    var zoneBefore = before.filter(function(m){ return getQuadrant(m) === 1; });
+    var zoneAfter = after.filter(function(m){ return getQuadrant(m) === 1; });
+    var reiZoneCandidate = zoneAfter.filter(function(m){ return getQuadrant(m)===1; })
+      .sort(function(a,b){ return Math.hypot(100-a.x,100-a.y) - Math.hypot(100-b.x,100-b.y); })[0];
+
+    html += "<h3>③ 役割の充足(統括候補ゾーン)</h3>";
+    if(zoneAfter.length > zoneBefore.length){
+      html += '<div class="highlight-box">統括候補ゾーンに新たな人材が加わります。' +
+        (reiZoneCandidate ? "最有力候補は「" + escapeHtml(reiZoneCandidate.name) + "」です。" : "") +
+        "伴野(Rei)のディレクション業務を渡せる状態に<b>近づく</b>可能性があります。ただし実際の権限移譲には経験・信頼の蓄積が必要です。</div>";
+    } else if(zoneAfter.length === zoneBefore.length && zoneAfter.length > 0){
+      html += "<p>統括候補ゾーンの人数に変化はありません。既存の候補(" + zoneAfter.map(function(m){return escapeHtml(m.name);}).join("、") +
+        ")の育成が引き続きRei からの権限移譲の鍵になります。</p>";
+    } else {
+      html += "<p>今回の候補は統括候補ゾーンには入りません。Reiのディレクション業務の移譲には直接寄与しない配置です。</p>";
+    }
+
+    // 4. workload change
+    html += "<h3>④ 負荷の変化</h3><ul>";
+    var beforeStatus = statusCounts(before);
+    var candidateGreenPlayer = candidates.filter(function(c){
+      return c.status === "green" && getQuadrant(c) === 3; // number x player, or generally player row
+    });
+    var candidatePlayerAny = candidates.filter(function(c){ return c.y < 50 && c.status !== "red"; });
+    if(candidatePlayerAny.length > 0){
+      html += "<li>候補(" + candidatePlayerAny.map(function(m){return escapeHtml(m.name);}).join("、") +
+        ")は実務層(プレイヤー)かつ稼働に余力があるため、飽和しているリーダー層(安井・柳・伴野)の実務を分担でき、余白が生まれる可能性があります。</li>";
+    } else {
+      html += "<li>候補は主にマネジメント層への配置であり、既存メンバーの実務負荷そのものはすぐには軽減されません。</li>";
+    }
+    var redCount = beforeStatus.red;
+    html += "<li>現在、稼働が赤(飽和)のメンバーは " + redCount + "名。実務移譲が進めば、この負荷分散が焦点になります。</li>";
+    html += "</ul>";
+
+    // 5. remaining gaps
+    html += "<h3>⑤ 残る穴</h3><ul>";
+    var gaps = [];
+    QUADRANT_NAMES.forEach(function(nameFn, qi){
+      if(afterCounts[qi] === 0){ gaps.push(nameFn()); }
+    });
+    if(gaps.length > 0){
+      html += "<li>候補配置後も「" + gaps.map(escapeHtml).join("」「") + "」は空白のままです。</li>";
+    } else {
+      html += "<li>4象限すべてに最低1名は配置される見込みです。</li>";
+    }
+    var grayReal = real.filter(function(m){ return m.status === "gray"; });
+    if(grayReal.length > 0){
+      html += "<li>稼働状況が「不明」のメンバー(" + grayReal.map(function(m){return escapeHtml(m.name);}).join("、") + ")の評価は依然として課題です。</li>";
+    }
+    html += "</ul>";
+
+    content.innerHTML = html;
+  }
+
+  /* ---------------- Export / Import / Reset ---------------- */
+  document.getElementById("btnExport").addEventListener("click", function(){
+    var blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "team-simulator-data.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("エクスポートしました");
+  });
+
+  var fileInput = document.getElementById("fileInput");
+  document.getElementById("btnImport").addEventListener("click", function(){
+    fileInput.value = "";
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", function(){
+    var file = fileInput.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e){
+      try{
+        var parsed = JSON.parse(e.target.result);
+        if(!parsed.axis || !parsed.members) throw new Error("invalid");
+        data = parsed;
+        selectedId = null;
+        saveData();
+        refreshAxisInputs();
+        renderAll();
+        toast("インポートしました");
+      }catch(err){
+        alert("読み込みに失敗しました。正しいJSONファイルか確認してください。");
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById("btnReset").addEventListener("click", function(){
+    if(confirm("すべてのデータを初期状態に戻します。よろしいですか？")){
+      data = defaultData();
+      selectedId = null;
+      saveData();
+      refreshAxisInputs();
+      renderAll();
+      toast("リセットしました");
+    }
+  });
+
+  /* ---------------- Render orchestration ---------------- */
+  function renderAll(){
+    renderMap();
+    renderMemberList();
+    renderDetail();
+    renderQuadrants();
+    renderReport();
+  }
+
+  refreshAxisInputs();
+  renderPresets();
+  renderAll();
+
+})();
+</script>
+</body>
+</html>
