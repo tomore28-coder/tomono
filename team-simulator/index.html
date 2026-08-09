@@ -244,6 +244,55 @@
   footer{ text-align:center; font-size:.72rem; color:var(--ink-soft); padding:30px 10px 10px; }
   .file-input{ display:none; }
   .zone-note{ font-size:.72rem; color:var(--ink-soft); margin-top:6px; }
+
+  /* staffing simulator */
+  .staffing-grid{ display:grid; grid-template-columns: 1.3fr 1fr; gap:20px; align-items:start; }
+  @media (max-width:760px){ .staffing-grid{ grid-template-columns: 1fr; } }
+  .slider-field{ margin-bottom:18px; }
+  .slider-field:last-child{ margin-bottom:0; }
+  .slider-field label{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:.82rem; color:var(--ink); margin-bottom:6px; font-weight:600;
+  }
+  .slider-field .value-badge{
+    background:var(--accent-soft); color:var(--accent-dark); border-radius:999px;
+    padding:2px 10px; font-size:.78rem; font-weight:700;
+  }
+  .slider-row{ display:flex; align-items:center; gap:10px; }
+  .slider-row input[type=range]{
+    flex:1; -webkit-appearance:none; appearance:none; height:5px; border-radius:999px;
+    background:var(--panel-border); outline:none;
+  }
+  .slider-row input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:18px; height:18px; border-radius:50%;
+    background:var(--accent); border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,0.25); cursor:pointer;
+  }
+  .slider-row input[type=range]::-moz-range-thumb{
+    width:18px; height:18px; border-radius:50%; background:var(--accent); border:2px solid #fff;
+    box-shadow:0 1px 4px rgba(0,0,0,0.25); cursor:pointer;
+  }
+  .mini-number{
+    width:64px; flex-shrink:0; border:1px solid var(--panel-border); border-radius:8px; padding:6px 8px;
+    font-size:.82rem; font-family:inherit; text-align:center; background:#fff; color:var(--ink);
+  }
+  .staffing-results{
+    background:#fffefb; border:1px solid var(--panel-border); border-radius:12px; padding:16px;
+  }
+  .result-row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:.85rem; color:var(--ink-soft); padding:7px 0; border-bottom:1px dashed var(--panel-border);
+  }
+  .result-row:last-of-type{ border-bottom:none; }
+  .result-row b{ font-size:1.05rem; color:var(--ink); }
+  .gap-display{ margin-top:14px; border-radius:12px; padding:16px; text-align:center; }
+  .gap-display.shortage{ background:var(--red-bg); border:1px solid #e6c9c2; }
+  .gap-display.surplus{ background:var(--green-bg); border:1px solid #cfe3d7; }
+  .gap-display.balanced{ background:var(--green-bg); border:1px solid #cfe3d7; }
+  .gap-display .gap-label{ font-size:.78rem; color:var(--ink-soft); margin-bottom:4px; }
+  .gap-display .gap-value{ font-size:1.6rem; font-weight:700; }
+  .gap-display.shortage .gap-value{ color:var(--red); }
+  .gap-display.surplus .gap-value, .gap-display.balanced .gap-value{ color:var(--green); }
+  .staffing-note{ font-size:.72rem; color:var(--ink-soft); margin-top:12px; }
 </style>
 </head>
 <body>
@@ -322,6 +371,53 @@
         <div id="detailBody"></div>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="panel">
+    <h2>デザイナー必要人数シミュレーター <span class="sub">開発者数と商品ローンチ数から必要デザイナー数を試算</span></h2>
+    <div class="staffing-grid">
+      <div class="staffing-inputs">
+        <div class="slider-field">
+          <label>開発者数 <span class="value-badge" id="devsValue">8</span></label>
+          <div class="slider-row">
+            <input type="range" id="devsSlider" min="1" max="50" step="1" value="8">
+            <input type="text" inputmode="numeric" class="mini-number" id="devsNumber" value="8">
+          </div>
+        </div>
+        <div class="slider-field">
+          <label>開発者1人あたり月間ローンチ数 <span class="value-badge" id="launchPerDevValue">2</span></label>
+          <div class="slider-row">
+            <input type="range" id="launchPerDevSlider" min="0.5" max="10" step="0.5" value="2">
+            <input type="text" inputmode="decimal" class="mini-number" id="launchPerDevNumber" value="2">
+          </div>
+        </div>
+        <div class="slider-field">
+          <label>デザイナー1人あたり月間処理可能数 <span class="value-badge" id="designerCapValue">2</span></label>
+          <div class="slider-row">
+            <input type="range" id="designerCapSlider" min="0.5" max="10" step="0.5" value="2">
+            <input type="text" inputmode="decimal" class="mini-number" id="designerCapNumber" value="2">
+          </div>
+        </div>
+        <div class="slider-field">
+          <label>現在の制作デザイナー数 <span class="value-badge" id="currentDesignersValue">5</span></label>
+          <div class="slider-row">
+            <input type="range" id="currentDesignersSlider" min="0" max="30" step="1" value="5">
+            <input type="text" inputmode="numeric" class="mini-number" id="currentDesignersNumber" value="5">
+          </div>
+        </div>
+      </div>
+      <div class="staffing-results">
+        <div class="result-row"><span>月間総ローンチ数</span><b id="totalLaunchesOut">16商品</b></div>
+        <div class="result-row"><span>必要デザイナー数</span><b id="neededDesignersOut">8人</b></div>
+        <div class="gap-display shortage" id="gapDisplay">
+          <div class="gap-label">過不足</div>
+          <div class="gap-value" id="gapValueOut">あと3人不足</div>
+        </div>
+      </div>
+    </div>
+    <p class="staffing-note">※ディレクター(伴野)は制作キャパに含めないため、この人数にはカウントしません。基本は「1商品=デザイナー1人が印刷からLPまで一貫」で計算しています。</p>
   </div>
 </div>
 
@@ -1042,6 +1138,137 @@
   refreshAxisInputs();
   renderPresets();
   renderAll();
+
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+
+  var STAFFING_KEY = "team-simulator-staffing-v1";
+
+  function defaultStaffing(){
+    return { devs:8, launchPerDev:2, designerCap:2, currentDesigners:5 };
+  }
+
+  function loadStaffing(){
+    try{
+      var raw = localStorage.getItem(STAFFING_KEY);
+      if(!raw) return defaultStaffing();
+      var parsed = JSON.parse(raw);
+      var def = defaultStaffing();
+      return {
+        devs: typeof parsed.devs === "number" ? parsed.devs : def.devs,
+        launchPerDev: typeof parsed.launchPerDev === "number" ? parsed.launchPerDev : def.launchPerDev,
+        designerCap: typeof parsed.designerCap === "number" ? parsed.designerCap : def.designerCap,
+        currentDesigners: typeof parsed.currentDesigners === "number" ? parsed.currentDesigners : def.currentDesigners
+      };
+    }catch(e){
+      return defaultStaffing();
+    }
+  }
+
+  var staffing = loadStaffing();
+
+  function saveStaffing(){
+    localStorage.setItem(STAFFING_KEY, JSON.stringify(staffing));
+  }
+
+  var els = {
+    devsSlider: document.getElementById("devsSlider"),
+    devsNumber: document.getElementById("devsNumber"),
+    devsValue: document.getElementById("devsValue"),
+    launchPerDevSlider: document.getElementById("launchPerDevSlider"),
+    launchPerDevNumber: document.getElementById("launchPerDevNumber"),
+    launchPerDevValue: document.getElementById("launchPerDevValue"),
+    designerCapSlider: document.getElementById("designerCapSlider"),
+    designerCapNumber: document.getElementById("designerCapNumber"),
+    designerCapValue: document.getElementById("designerCapValue"),
+    currentDesignersSlider: document.getElementById("currentDesignersSlider"),
+    currentDesignersNumber: document.getElementById("currentDesignersNumber"),
+    currentDesignersValue: document.getElementById("currentDesignersValue"),
+    totalLaunchesOut: document.getElementById("totalLaunchesOut"),
+    neededDesignersOut: document.getElementById("neededDesignersOut"),
+    gapDisplay: document.getElementById("gapDisplay"),
+    gapValueOut: document.getElementById("gapValueOut")
+  };
+
+  function clampNum(v, min, max){
+    if(isNaN(v)) return min;
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function formatNum(v){
+    return (Math.round(v * 10) / 10).toString();
+  }
+
+  function syncInputs(){
+    els.devsSlider.value = staffing.devs;
+    els.devsNumber.value = staffing.devs;
+    els.devsValue.textContent = staffing.devs;
+
+    els.launchPerDevSlider.value = staffing.launchPerDev;
+    els.launchPerDevNumber.value = formatNum(staffing.launchPerDev);
+    els.launchPerDevValue.textContent = formatNum(staffing.launchPerDev);
+
+    els.designerCapSlider.value = staffing.designerCap;
+    els.designerCapNumber.value = formatNum(staffing.designerCap);
+    els.designerCapValue.textContent = formatNum(staffing.designerCap);
+
+    els.currentDesignersSlider.value = staffing.currentDesigners;
+    els.currentDesignersNumber.value = staffing.currentDesigners;
+    els.currentDesignersValue.textContent = staffing.currentDesigners;
+  }
+
+  function render(){
+    var totalLaunches = staffing.devs * staffing.launchPerDev;
+    var neededDesigners = staffing.designerCap > 0 ? totalLaunches / staffing.designerCap : 0;
+    var gap = neededDesigners - staffing.currentDesigners;
+    var roundedGap = Math.round(gap * 10) / 10;
+
+    els.totalLaunchesOut.textContent = formatNum(totalLaunches) + "商品";
+    els.neededDesignersOut.textContent = formatNum(neededDesigners) + "人";
+
+    els.gapDisplay.classList.remove("shortage", "surplus", "balanced");
+    if(roundedGap > 0.05){
+      els.gapDisplay.classList.add("shortage");
+      els.gapValueOut.textContent = "あと" + formatNum(gap) + "人不足";
+    } else if(roundedGap < -0.05){
+      els.gapDisplay.classList.add("surplus");
+      els.gapValueOut.textContent = formatNum(Math.abs(gap)) + "人 余剰(充足)";
+    } else {
+      els.gapDisplay.classList.add("balanced");
+      els.gapValueOut.textContent = "充足";
+    }
+  }
+
+  function update(){
+    saveStaffing();
+    syncInputs();
+    render();
+  }
+
+  function bindPair(slider, number, key, min, max, isInt){
+    slider.addEventListener("input", function(){
+      var v = parseFloat(slider.value);
+      staffing[key] = isInt ? Math.round(v) : v;
+      update();
+    });
+    number.addEventListener("change", function(){
+      var v = clampNum(parseFloat(number.value), min, max);
+      staffing[key] = isInt ? Math.round(v) : v;
+      update();
+    });
+  }
+
+  bindPair(els.devsSlider, els.devsNumber, "devs", 1, 50, true);
+  bindPair(els.launchPerDevSlider, els.launchPerDevNumber, "launchPerDev", 0.5, 10, false);
+  bindPair(els.designerCapSlider, els.designerCapNumber, "designerCap", 0.5, 10, false);
+  bindPair(els.currentDesignersSlider, els.currentDesignersNumber, "currentDesigners", 0, 30, true);
+
+  syncInputs();
+  render();
 
 })();
 </script>
