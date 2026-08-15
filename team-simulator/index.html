@@ -129,7 +129,7 @@
     width:110px;
     background:#fff;
   }
-  #mapWrap{
+  #mapWrap, #idealMapWrap{
     position:relative;
     width:100%;
     aspect-ratio:1/1;
@@ -137,7 +137,7 @@
     margin:0 auto;
     touch-action:none;
   }
-  svg#map{
+  svg#map, svg#idealMap{
     width:100%;
     height:100%;
     display:block;
@@ -346,6 +346,15 @@
     display:flex; justify-content:space-between; align-items:baseline; gap:8px;
   }
   .workload-designer-block h3 .total-hours{ font-size:.78rem; color:var(--ink-soft); font-weight:400; }
+
+  /* map sections (current / ideal) */
+  .section-header{
+    display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center;
+    gap:10px; margin-bottom:16px;
+  }
+  .section-header .toolbar{ margin-bottom:0; }
+  .section-title{ font-size:1.05rem; font-weight:700; color:var(--accent-dark); margin:0; }
+  .section-divider{ border:none; border-top:1px solid var(--panel-border); margin:8px 0 26px; }
 </style>
 </head>
 <body>
@@ -365,12 +374,15 @@
 
 <div class="container tab-panel active" data-tab-panel="map">
 
-  <div class="toolbar">
-    <button class="primary" id="btnAddMember">＋ メンバーを追加</button>
-    <button id="btnExport">エクスポート</button>
-    <button id="btnImport">インポート</button>
-    <input type="file" id="fileInput" class="file-input" accept="application/json">
-    <button class="danger" id="btnReset">リセット</button>
+  <div class="section-header">
+    <h2 class="section-title">現在の配置</h2>
+    <div class="toolbar">
+      <button class="primary" id="btnAddMember">＋ メンバーを追加</button>
+      <button id="btnExport">エクスポート</button>
+      <button id="btnImport">インポート</button>
+      <input type="file" id="fileInput" class="file-input" accept="application/json">
+      <button class="danger" id="btnReset">リセット</button>
+    </div>
   </div>
 
   <div class="layout">
@@ -428,6 +440,48 @@
       <div class="panel hidden" id="detailPanel">
         <h2 id="detailTitle">詳細</h2>
         <div id="detailBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <div class="section-header">
+    <h2 class="section-title">1年後の理想</h2>
+    <div class="toolbar">
+      <button class="primary" id="btnIdealAddMember">＋ メンバーを追加</button>
+      <button id="btnCopyFromCurrent">現在をコピー</button>
+      <button id="btnIdealAddPlanned">＋ 採用予定枠を追加</button>
+      <button class="danger" id="btnIdealReset">理想マップをリセット</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="panel">
+        <h2>2軸マップ(1年後) <span class="sub">点をドラッグして配置を調整できます</span></h2>
+        <div id="idealMapWrap">
+          <svg id="idealMap" viewBox="0 0 600 600"></svg>
+        </div>
+        <div class="legend">
+          <span><span class="dot green"></span>余力あり</span>
+          <span><span class="dot yellow"></span>やや飽和</span>
+          <span><span class="dot red"></span>飽和</span>
+          <span><span class="dot gray"></span>不明</span>
+          <span><span class="dot candidate"></span>採用予定(点線)</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>メンバー一覧(1年後)</h2>
+        <div class="member-list" id="idealMemberList"></div>
+      </div>
+
+      <div class="panel hidden" id="idealDetailPanel">
+        <h2 id="idealDetailTitle">詳細</h2>
+        <div id="idealDetailBody"></div>
       </div>
     </div>
   </div>
@@ -560,6 +614,52 @@
   </div>
 </div>
 
+<!-- Ideal Edit Modal -->
+<div class="modal-backdrop hidden" id="idealEditModal">
+  <div class="modal">
+    <h3 id="idealModalTitle">メンバーを編集</h3>
+    <div class="field">
+      <label>名前</label>
+      <input type="text" id="if_name" placeholder="例: 山田">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label id="if_xLabel">横軸値 (0-100)</label>
+        <input type="text" inputmode="numeric" id="if_x" placeholder="0-100">
+      </div>
+      <div class="field">
+        <label id="if_yLabel">縦軸値 (0-100)</label>
+        <input type="text" inputmode="numeric" id="if_y" placeholder="0-100">
+      </div>
+    </div>
+    <div class="field">
+      <label>稼働状況</label>
+      <div class="status-select" id="idealStatusSelect">
+        <div class="status-opt sel-green" data-status="green">緑・余力</div>
+        <div class="status-opt sel-yellow" data-status="yellow">黄・やや飽和</div>
+        <div class="status-opt sel-red" data-status="red">赤・飽和</div>
+        <div class="status-opt sel-gray" data-status="gray">グレー・不明</div>
+      </div>
+    </div>
+    <div class="field">
+      <label>強み</label>
+      <input type="text" id="if_strength" placeholder="例: 0→1表現・調整力">
+    </div>
+    <div class="field">
+      <label>志向</label>
+      <input type="text" id="if_orientation" placeholder="例: クリエイティブ統括">
+    </div>
+    <div class="field">
+      <label>育成メモ (任意)</label>
+      <textarea id="if_memo" placeholder="任意のメモ"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="primary" id="btnIdealSaveMember">保存</button>
+      <button class="ghost" id="btnIdealCancelModal">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -611,6 +711,7 @@
 
   function saveData(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    try{ window.dispatchEvent(new CustomEvent("team-sim:current-updated")); }catch(e){}
   }
 
   function toast(msg){
@@ -1166,7 +1267,10 @@
 
   /* ---------------- Export / Import / Reset ---------------- */
   document.getElementById("btnExport").addEventListener("click", function(){
-    var blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+    var idealRaw = null;
+    try{ idealRaw = JSON.parse(localStorage.getItem("team-simulator-ideal-data-v1") || "null"); }catch(e){ idealRaw = null; }
+    var exportPayload = { current: data, ideal: (idealRaw && idealRaw.members) ? idealRaw : { members: [] } };
+    var blob = new Blob([JSON.stringify(exportPayload, null, 2)], {type:"application/json"});
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
@@ -1190,12 +1294,24 @@
     reader.onload = function(e){
       try{
         var parsed = JSON.parse(e.target.result);
-        if(!parsed.axis || !parsed.members) throw new Error("invalid");
-        data = parsed;
+        var currentPart = null, idealPart = null;
+        if(parsed.current && parsed.current.axis && parsed.current.members){
+          currentPart = parsed.current;
+          idealPart = (parsed.ideal && parsed.ideal.members) ? parsed.ideal : { members: [] };
+        } else if(parsed.axis && parsed.members){
+          currentPart = parsed;
+        } else {
+          throw new Error("invalid");
+        }
+        data = currentPart;
         selectedId = null;
         saveData();
         refreshAxisInputs();
         renderAll();
+        if(idealPart){
+          localStorage.setItem("team-simulator-ideal-data-v1", JSON.stringify(idealPart));
+          try{ window.dispatchEvent(new CustomEvent("team-sim:ideal-imported")); }catch(err2){}
+        }
         toast("インポートしました");
       }catch(err){
         alert("読み込みに失敗しました。正しいJSONファイルか確認してください。");
@@ -1657,6 +1773,423 @@
   });
 
   renderWorkload();
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+
+  var IDEAL_KEY = "team-simulator-ideal-data-v1";
+  var CURRENT_KEY = "team-simulator-data-v1";
+  var DEFAULT_AXIS = { left:"クリエイティブ", right:"数字", bottom:"プレイヤー", top:"マネジメント" };
+
+  var STATUS_COLORS = {
+    green: getCss("--green"), yellow: getCss("--yellow"),
+    red: getCss("--red"), gray: getCss("--gray")
+  };
+  var STATUS_LABEL = { green:"余力あり", yellow:"やや飽和", red:"飽和", gray:"不明" };
+
+  function getCss(v){
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  }
+
+  function iuid(){ return "i_" + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+  function readCurrentData(){
+    try{
+      var raw = localStorage.getItem(CURRENT_KEY);
+      if(!raw) return { axis: DEFAULT_AXIS, members: [] };
+      var parsed = JSON.parse(raw);
+      if(!parsed.axis || !parsed.members) return { axis: DEFAULT_AXIS, members: [] };
+      return parsed;
+    }catch(e){
+      return { axis: DEFAULT_AXIS, members: [] };
+    }
+  }
+
+  function cloneFromCurrent(){
+    var cur = readCurrentData();
+    return {
+      members: cur.members.filter(function(m){ return !m.candidate; }).map(function(m){
+        return {
+          id: iuid(), name:m.name, x:m.x, y:m.y, status:m.status,
+          strength:m.strength, orientation:m.orientation, memo:m.memo, candidate:false
+        };
+      })
+    };
+  }
+
+  function loadIdeal(){
+    try{
+      var raw = localStorage.getItem(IDEAL_KEY);
+      if(!raw) return cloneFromCurrent();
+      var parsed = JSON.parse(raw);
+      if(!parsed.members) return cloneFromCurrent();
+      return parsed;
+    }catch(e){
+      return cloneFromCurrent();
+    }
+  }
+
+  var ideal = loadIdeal();
+  var selectedId = null;
+  var editingId = null;
+  var dragging = null;
+
+  function saveIdeal(){
+    localStorage.setItem(IDEAL_KEY, JSON.stringify(ideal));
+  }
+
+  function toast(msg){
+    var t = document.getElementById("toast");
+    if(!t) return;
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(function(){ t.classList.remove("show"); }, 2200);
+  }
+
+  function escapeHtml(str){
+    var d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
+
+  function getAxis(){
+    var l = document.getElementById("axisLeft");
+    var r = document.getElementById("axisRight");
+    var b = document.getElementById("axisBottom");
+    var t = document.getElementById("axisTop");
+    return {
+      left: (l && l.value) || DEFAULT_AXIS.left,
+      right: (r && r.value) || DEFAULT_AXIS.right,
+      bottom: (b && b.value) || DEFAULT_AXIS.bottom,
+      top: (t && t.value) || DEFAULT_AXIS.top
+    };
+  }
+
+  function findMember(id){
+    return ideal.members.find(function(m){ return m.id === id; });
+  }
+
+  /* ---------------- SVG Map ---------------- */
+  var svgNS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("idealMap");
+  var VB = 600;
+  var PAD = 46;
+
+  function toSvgX(x){ return PAD + (x/100) * (VB - PAD*2); }
+  function toSvgY(y){ return (VB - PAD) - (y/100) * (VB - PAD*2); }
+  function fromSvgX(px){ return clamp(Math.round(((px - PAD) / (VB - PAD*2)) * 100), 0, 100); }
+  function fromSvgY(py){ return clamp(Math.round((((VB - PAD) - py) / (VB - PAD*2)) * 100), 0, 100); }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function el(tag, attrs){
+    var e = document.createElementNS(svgNS, tag);
+    for(var k in attrs){ e.setAttribute(k, attrs[k]); }
+    return e;
+  }
+
+  function renderMap(){
+    var axis = getAxis();
+    svg.innerHTML = "";
+    svg.setAttribute("viewBox", "0 0 " + VB + " " + VB);
+
+    var mid = VB/2;
+    var plotMin = PAD, plotMax = VB - PAD;
+
+    svg.appendChild(el("rect",{x:plotMin,y:plotMin,width:mid-plotMin,height:mid-plotMin,fill:"#eef1e9",opacity:0.55}));
+    svg.appendChild(el("rect",{x:mid,y:plotMin,width:plotMax-mid,height:mid-plotMin,fill:"#f6ecd3",opacity:0.6}));
+    svg.appendChild(el("rect",{x:plotMin,y:mid,width:mid-plotMin,height:plotMax-mid,fill:"#f3ede0",opacity:0.45}));
+    svg.appendChild(el("rect",{x:mid,y:mid,width:plotMax-mid,height:plotMax-mid,fill:"#efe9df",opacity:0.45}));
+
+    svg.appendChild(el("rect",{x:plotMin,y:plotMin,width:plotMax-plotMin,height:plotMax-plotMin,fill:"none",stroke:"#ddd3bf","stroke-width":1.2}));
+
+    svg.appendChild(el("line",{x1:mid,y1:plotMin,x2:mid,y2:plotMax,stroke:"#ddd3bf","stroke-width":1,"stroke-dasharray":"4,4"}));
+    svg.appendChild(el("line",{x1:plotMin,y1:mid,x2:plotMax,y2:mid,stroke:"#ddd3bf","stroke-width":1,"stroke-dasharray":"4,4"}));
+
+    var zoneLabel = el("text",{x:plotMax-8,y:plotMin+22,"text-anchor":"end","font-size":"13","font-weight":"700",fill:"#a5793c"});
+    zoneLabel.textContent = "統括候補ゾーン";
+    svg.appendChild(zoneLabel);
+    var zoneRect = el("rect",{x:mid+ (plotMax-mid)*0.15, y:plotMin, width:(plotMax-mid)*0.85, height:(mid-plotMin)*0.55, fill:"none", stroke:"#c9a25a","stroke-width":1,"stroke-dasharray":"3,3", opacity:0.7});
+    svg.appendChild(zoneRect);
+
+    function axisText(x,y,anchor,txt){
+      var t = el("text",{x:x,y:y,"text-anchor":anchor,"font-size":"13",fill:"#6b6354","font-weight":"600"});
+      t.textContent = txt;
+      svg.appendChild(t);
+    }
+    axisText(plotMin+2, VB-14, "start", "← " + axis.left);
+    axisText(plotMax-2, VB-14, "end", axis.right + " →");
+    axisText(plotMin-8, plotMin+4, "start", "↑ " + axis.top);
+    var g2 = el("text",{x:plotMin-8,y:plotMax,"text-anchor":"start","font-size":"13",fill:"#6b6354","font-weight":"600"});
+    g2.textContent = "↓ " + axis.bottom;
+    svg.appendChild(g2);
+
+    /* faint guide lines back to the current-map position of same-named members */
+    var currentMembers = readCurrentData().members.filter(function(m){ return !m.candidate; });
+    ideal.members.forEach(function(m){
+      if(m.candidate) return;
+      var match = currentMembers.find(function(c){ return c.name === m.name; });
+      if(!match) return;
+      if(match.x === m.x && match.y === m.y) return;
+      var cx1 = toSvgX(match.x), cy1 = toSvgY(match.y);
+      var cx2 = toSvgX(m.x), cy2 = toSvgY(m.y);
+      svg.appendChild(el("line",{x1:cx1,y1:cy1,x2:cx2,y2:cy2,stroke:"#8a6d4c","stroke-width":1.2,"stroke-dasharray":"3,3",opacity:0.45}));
+      svg.appendChild(el("circle",{cx:cx1,cy:cy1,r:6,fill:"#8a6d4c",opacity:0.25}));
+    });
+
+    ideal.members.forEach(function(m){
+      var cx = toSvgX(m.x), cy = toSvgY(m.y);
+      var color = STATUS_COLORS[m.status] || STATUS_COLORS.gray;
+      var g = el("g",{ "data-id": m.id, style:"cursor:pointer;" });
+
+      var r = m.candidate ? 15 : 14;
+      var circle = el("circle",{cx:cx, cy:cy, r:r, fill: m.candidate ? "#fffefb" : color,
+        stroke: color, "stroke-width": m.candidate ? 2.4 : 1.5,
+        "stroke-dasharray": m.candidate ? "5,4" : "none", opacity: m.candidate ? 0.95 : 1 });
+      g.appendChild(circle);
+
+      if(selectedId === m.id){
+        var ring = el("circle",{cx:cx, cy:cy, r:r+5, fill:"none", stroke:"#8a6d4c", "stroke-width":2, "stroke-dasharray":"2,3"});
+        g.appendChild(ring);
+      }
+
+      var label = el("text",{x:cx, y:cy+r+15, "text-anchor":"middle", "font-size":"12.5", fill:"#4a4436", "font-weight": m.candidate ? "600":"500"});
+      label.textContent = m.name + (m.candidate ? "(採用予定)" : "");
+      g.appendChild(label);
+
+      g.addEventListener("pointerdown", function(ev){
+        ev.preventDefault();
+        dragging = { id: m.id, pointerId: ev.pointerId };
+        svg.setPointerCapture(ev.pointerId);
+        selectedId = m.id;
+        renderAll();
+      });
+      g.addEventListener("click", function(ev){ ev.stopPropagation(); });
+
+      svg.appendChild(g);
+    });
+
+    svg.onpointermove = function(ev){
+      if(!dragging) return;
+      var rect = svg.getBoundingClientRect();
+      var scale = VB / rect.width;
+      var px = (ev.clientX - rect.left) * scale;
+      var py = (ev.clientY - rect.top) * scale;
+      var m = findMember(dragging.id);
+      if(!m) return;
+      m.x = fromSvgX(px);
+      m.y = fromSvgY(py);
+      renderMap();
+      if(editingId === null && selectedId === m.id){ renderDetail(); }
+    };
+    function endDrag(){
+      if(dragging){ saveIdeal(); dragging = null; renderAll(); }
+    }
+    svg.onpointerup = endDrag;
+    svg.onpointercancel = endDrag;
+
+    svg.onclick = function(ev){
+      if(ev.target === svg){ selectedId = null; renderAll(); }
+    };
+  }
+
+  /* ---------------- Member list ---------------- */
+  function renderMemberList(){
+    var list = document.getElementById("idealMemberList");
+    list.innerHTML = "";
+    if(ideal.members.length === 0){
+      list.innerHTML = '<div class="empty-state">メンバーがいません。追加するか「現在をコピー」してください。</div>';
+      return;
+    }
+    ideal.members.forEach(function(m){
+      var row = document.createElement("div");
+      row.className = "member-row";
+      row.innerHTML =
+        '<span class="name"><span class="status-dot" style="background:' + (STATUS_COLORS[m.status]||STATUS_COLORS.gray) + '"></span>' +
+        escapeHtml(m.name) + (m.candidate ? ' <span class="tag">(採用予定)</span>' : '') + '</span>' +
+        '<span class="tag">' + m.x + ' / ' + m.y + '</span>';
+      row.addEventListener("click", function(){ selectedId = m.id; renderAll(); });
+      list.appendChild(row);
+    });
+  }
+
+  /* ---------------- Detail Panel ---------------- */
+  function renderDetail(){
+    var panel = document.getElementById("idealDetailPanel");
+    var body = document.getElementById("idealDetailBody");
+    var title = document.getElementById("idealDetailTitle");
+    if(!selectedId){ panel.classList.add("hidden"); return; }
+    var m = findMember(selectedId);
+    if(!m){ panel.classList.add("hidden"); return; }
+    panel.classList.remove("hidden");
+    var axis = getAxis();
+    title.textContent = m.name + (m.candidate ? "(採用予定)" : "");
+    body.innerHTML =
+      '<div class="field"><label>' + escapeHtml(axis.left) + ' ← → ' + escapeHtml(axis.right) + '</label><div>' + m.x + ' / 100</div></div>' +
+      '<div class="field"><label>' + escapeHtml(axis.bottom) + ' ← → ' + escapeHtml(axis.top) + '</label><div>' + m.y + ' / 100</div></div>' +
+      '<div class="field"><label>稼働状況</label><div>' + STATUS_LABEL[m.status] + '</div></div>' +
+      '<div class="field"><label>強み</label><div>' + escapeHtml(m.strength||"—") + '</div></div>' +
+      '<div class="field"><label>志向</label><div>' + escapeHtml(m.orientation||"—") + '</div></div>' +
+      '<div class="field"><label>メモ</label><div>' + escapeHtml(m.memo||"—") + '</div></div>' +
+      '<div class="form-actions">' +
+        '<button class="small" id="btnIdealEditThis">編集</button>' +
+        (m.candidate ? '<button class="small primary" id="btnIdealConfirm">採用予定を確定(通常メンバーに変換)</button><button class="small danger" id="btnIdealRemove">枠を消す</button>' :
+          '<button class="small danger" id="btnIdealDeleteThis">削除</button>') +
+      '</div>';
+
+    var editBtn = document.getElementById("btnIdealEditThis");
+    if(editBtn) editBtn.addEventListener("click", function(){ openEditModal(m.id); });
+    var delBtn = document.getElementById("btnIdealDeleteThis");
+    if(delBtn) delBtn.addEventListener("click", function(){
+      if(confirm(m.name + "を削除しますか？")){
+        ideal.members = ideal.members.filter(function(x){ return x.id !== m.id; });
+        selectedId = null; saveIdeal(); renderAll();
+      }
+    });
+    var confirmBtn = document.getElementById("btnIdealConfirm");
+    if(confirmBtn) confirmBtn.addEventListener("click", function(){
+      m.candidate = false; saveIdeal(); toast(m.name + "を確定しました"); renderAll();
+    });
+    var removeBtn = document.getElementById("btnIdealRemove");
+    if(removeBtn) removeBtn.addEventListener("click", function(){
+      ideal.members = ideal.members.filter(function(x){ return x.id !== m.id; });
+      selectedId = null; saveIdeal(); renderAll();
+    });
+  }
+
+  /* ---------------- Edit Modal ---------------- */
+  var modal = document.getElementById("idealEditModal");
+  var f_name = document.getElementById("if_name");
+  var f_x = document.getElementById("if_x");
+  var f_y = document.getElementById("if_y");
+  var f_strength = document.getElementById("if_strength");
+  var f_orientation = document.getElementById("if_orientation");
+  var f_memo = document.getElementById("if_memo");
+  var statusOpts = document.querySelectorAll("#idealStatusSelect .status-opt");
+  var currentStatus = "gray";
+
+  statusOpts.forEach(function(opt){
+    opt.addEventListener("click", function(){
+      currentStatus = opt.getAttribute("data-status");
+      statusOpts.forEach(function(o){ o.classList.remove("active"); });
+      opt.classList.add("active");
+    });
+  });
+
+  function openEditModal(id){
+    editingId = id || null;
+    var axis = getAxis();
+    document.getElementById("if_xLabel").textContent = axis.left + "軸 値 (0=" + axis.left + " / 100=" + axis.right + ")";
+    document.getElementById("if_yLabel").textContent = axis.bottom + "軸 値 (0=" + axis.bottom + " / 100=" + axis.top + ")";
+    if(id){
+      var m = findMember(id);
+      document.getElementById("idealModalTitle").textContent = "メンバーを編集";
+      f_name.value = m.name;
+      f_x.value = m.x;
+      f_y.value = m.y;
+      f_strength.value = m.strength || "";
+      f_orientation.value = m.orientation || "";
+      f_memo.value = m.memo || "";
+      currentStatus = m.status;
+    } else {
+      document.getElementById("idealModalTitle").textContent = "メンバーを追加";
+      f_name.value = ""; f_x.value = "50"; f_y.value = "50";
+      f_strength.value = ""; f_orientation.value = ""; f_memo.value = "";
+      currentStatus = "gray";
+    }
+    statusOpts.forEach(function(o){
+      o.classList.toggle("active", o.getAttribute("data-status") === currentStatus);
+    });
+    modal.classList.remove("hidden");
+  }
+
+  function closeModal(){
+    modal.classList.add("hidden");
+    editingId = null;
+  }
+
+  document.getElementById("btnIdealCancelModal").addEventListener("click", closeModal);
+  document.getElementById("btnIdealAddMember").addEventListener("click", function(){ openEditModal(null); });
+
+  document.getElementById("btnIdealSaveMember").addEventListener("click", function(){
+    var name = f_name.value.trim();
+    if(!name){ alert("名前を入力してください"); return; }
+    var x = clamp(parseInt(f_x.value,10) || 0, 0, 100);
+    var y = clamp(parseInt(f_y.value,10) || 0, 0, 100);
+
+    if(editingId){
+      var m = findMember(editingId);
+      m.name = name; m.x = x; m.y = y; m.status = currentStatus;
+      m.strength = f_strength.value.trim();
+      m.orientation = f_orientation.value.trim();
+      m.memo = f_memo.value.trim();
+    } else {
+      var newM = {
+        id: iuid(), name:name, x:x, y:y, status:currentStatus,
+        strength: f_strength.value.trim(), orientation: f_orientation.value.trim(),
+        memo: f_memo.value.trim(), candidate:false
+      };
+      ideal.members.push(newM);
+      selectedId = newM.id;
+    }
+    saveIdeal();
+    closeModal();
+    renderAll();
+  });
+
+  /* ---------------- Toolbar actions ---------------- */
+  document.getElementById("btnCopyFromCurrent").addEventListener("click", function(){
+    if(confirm("現在の配置を理想マップにコピーします。理想マップの既存データは上書きされます。よろしいですか？")){
+      ideal = cloneFromCurrent();
+      selectedId = null;
+      saveIdeal();
+      renderAll();
+      toast("現在の配置をコピーしました");
+    }
+  });
+
+  document.getElementById("btnIdealAddPlanned").addEventListener("click", function(){
+    var newM = { id: iuid(), name:"採用予定", x:50, y:50, status:"gray", strength:"", orientation:"", memo:"", candidate:true };
+    ideal.members.push(newM);
+    selectedId = newM.id;
+    saveIdeal();
+    renderAll();
+    openEditModal(newM.id);
+  });
+
+  document.getElementById("btnIdealReset").addEventListener("click", function(){
+    if(confirm("理想マップを初期状態(現在マップのコピー)に戻します。よろしいですか？")){
+      ideal = cloneFromCurrent();
+      selectedId = null;
+      saveIdeal();
+      renderAll();
+      toast("理想マップをリセットしました");
+    }
+  });
+
+  /* ---------------- Sync with current map ---------------- */
+  ["axisLeft","axisRight","axisBottom","axisTop"].forEach(function(id){
+    var input = document.getElementById(id);
+    if(input) input.addEventListener("input", renderMap);
+  });
+  window.addEventListener("team-sim:current-updated", renderMap);
+  window.addEventListener("team-sim:ideal-imported", function(){
+    ideal = loadIdeal();
+    selectedId = null;
+    renderAll();
+  });
+
+  /* ---------------- Render orchestration ---------------- */
+  function renderAll(){
+    renderMap();
+    renderMemberList();
+    renderDetail();
+  }
+
+  renderAll();
 })();
 </script>
 </body>
