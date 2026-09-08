@@ -339,13 +339,25 @@
   .workload-bar-track{ background:var(--panel-border); border-radius:999px; height:10px; overflow:hidden; }
   .workload-bar-fill{ height:100%; background:var(--accent); border-radius:999px; }
   .workload-bar-fill.rank1{ background:var(--accent-dark); }
-  .workload-designer-block{ margin-bottom:20px; }
-  .workload-designer-block:last-child{ margin-bottom:0; }
-  .workload-designer-block h3{
-    font-size:.88rem; color:var(--accent-dark); margin:0 0 8px;
-    display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+  .workload-subsection{ margin-top:18px; }
+  .workload-subsection:first-of-type{ margin-top:0; }
+  .workload-subsection h4{ font-size:.8rem; color:var(--accent-dark); margin:0 0 8px; font-weight:700; }
+  .workload-note{ font-size:.68rem; color:var(--ink-soft); margin-top:6px; }
+  .split-bar{ display:flex; height:14px; border-radius:999px; overflow:hidden; background:var(--panel-border); }
+  .split-bar .seg-design{ background:var(--accent); }
+  .split-bar .seg-other{ background:var(--gray); }
+  .split-bar-legend{
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;
+    font-size:.78rem; color:var(--ink-soft); margin-top:6px;
   }
-  .workload-designer-block h3 .total-hours{ font-size:.78rem; color:var(--ink-soft); font-weight:400; }
+  .split-bar-legend b{ color:var(--ink); font-weight:700; }
+  .indirect-list{ display:flex; flex-direction:column; }
+  .indirect-row{
+    display:flex; justify-content:space-between; font-size:.82rem;
+    padding:7px 0; border-bottom:1px dashed var(--panel-border);
+  }
+  .indirect-row:last-child{ border-bottom:none; }
+  .indirect-row b{ color:var(--ink); }
 
   /* map sections (current / ideal) */
   .section-header{
@@ -536,7 +548,7 @@
 
 <div class="container tab-panel" data-tab-panel="workload">
   <div class="panel">
-    <h2>タスク・稼働分析 <span class="sub">タイムログCSVからプロジェクト別の時間配分を可視化</span></h2>
+    <h2>タスク・稼働分析 <span class="sub">タイムログCSVから稼働の内訳を段階的に可視化</span></h2>
     <div class="workload-upload">
       <label class="upload-drop" for="workloadFileInput">
         <input type="file" id="workloadFileInput" accept=".csv" multiple class="file-input">
@@ -545,22 +557,14 @@
       <button type="button" class="danger small" id="btnClearWorkload">読み込みデータをすべて消す</button>
     </div>
     <div class="workload-file-list" id="workloadFileList"></div>
-    <p class="staffing-note">※列: Project / Text / Weekday / Date / Start time / Duration / Day accumulated / Location を想定した簡易CSVです。プロジェクト名はTaskのText内から簡易抽出するため、厳密な分類ではありません。ファイル名がそのままデザイナー名になります(下の一覧で変更可能)。</p>
+    <p class="staffing-note">※列: Project / Text / Weekday / Date / Start time / Duration / Day accumulated / Location を想定した簡易CSVです。Text内の【デザイン】【制作】【神谷】のようなタグから作業種別・プロジェクトを簡易抽出するため、厳密な分類ではありません。ファイル名がそのままデザイナー名になります(下の一覧で変更可能)。</p>
   </div>
+
+  <div id="workloadDesignerReports"></div>
 
   <div class="panel" id="workloadSummaryPanel" hidden>
-    <h2>デザイナー別 総稼働時間</h2>
+    <h2>デザイナー間の総稼働時間の比較</h2>
     <div class="workload-bars" id="workloadTotalsChart"></div>
-  </div>
-
-  <div class="panel" id="workloadPerDesignerPanel" hidden>
-    <h2>デザイナー別 プロジェクト時間ランキング</h2>
-    <div id="workloadPerDesigner"></div>
-  </div>
-
-  <div class="panel" id="workloadOverallPanel" hidden>
-    <h2>全員合算 プロジェクト別総時間</h2>
-    <div class="workload-bars" id="workloadOverallChart"></div>
   </div>
 </div>
 
@@ -1560,33 +1564,88 @@
     return num * 24;
   }
 
-  /* Loose product/project name extraction from the free-text Text column,
-     since the tag column isn't consistently used. Not meant to be exact. */
+  /* Loose product/project name extraction from the free-text Text column.
+     A 【...】 tag that isn't one of the known category tags is treated as
+     the client/product identifier (e.g. 【神谷】【大塚】); otherwise falls
+     back to splitting the tag-stripped text on common delimiters. Not meant
+     to be exact. */
+  var CATEGORY_TAG_NAMES = ["デザイン","制作","作業","思考","教育","AI","改善"];
+
   function extractProjectName(text){
     if(!text) return "(未分類)";
     var t = String(text);
-    t = t.replace(/【[^】]*】?/g, " ");
-    t = t.trim();
-    if(!t) return "(未分類)";
-    var parts = t.split(/[\/／・:：\-–\|,、]+/).map(function(s){ return s.trim(); }).filter(Boolean);
-    var candidate = parts.length ? parts[0] : t;
+    var tagMatches = t.match(/【([^】]*)】/g) || [];
+    for(var i=0; i<tagMatches.length; i++){
+      var inner = tagMatches[i].slice(1, -1).trim();
+      if(inner && CATEGORY_TAG_NAMES.indexOf(inner) === -1){
+        return inner.length > 24 ? inner.slice(0, 24) + "…" : inner;
+      }
+    }
+    var stripped = t.replace(/【[^】]*】?/g, " ").trim();
+    if(!stripped) return "(未分類)";
+    var parts = stripped.split(/[\/／・:：\-–\|,、]+/).map(function(s){ return s.trim(); }).filter(Boolean);
+    var candidate = parts.length ? parts[0] : stripped;
     if(candidate.length > 24) candidate = candidate.slice(0, 24) + "…";
     return candidate || "(未分類)";
   }
 
+  var WORK_TAGS = ["制作","作業","思考","教育","AI","改善"];
+  var INDIRECT_DEFS = [
+    { key:"wcheck", label:"後輩のWチェック/チェック", test:/チェック/ },
+    { key:"meeting", label:"MTG・相談会・定例", test:/MTG|ミーティング|相談会|定例/i },
+    { key:"weeklyReport", label:"週次報告", test:/週次報告|週報/ },
+    { key:"chatCoord", label:"チャット返信・調整", test:/チャット|返信|調整/ }
+  ];
+
   function aggregateRows(rows){
     var totalHours = 0;
+    var recordCount = 0;
+    var designHours = 0, otherHours = 0;
+    var tagHours = {};
     var projects = {};
+    var indirect = { wcheck:0, meeting:0, weeklyReport:0, chatCoord:0 };
+
     rows.forEach(function(row){
       var durationRaw = row["Duration"] || row["duration"] || row["DURATION"] || "";
       var hours = parseDuration(durationRaw);
       if(!hours || hours <= 0) return;
       var text = row["Text"] || row["text"] || row["Project"] || row["project"] || "";
-      var proj = extractProjectName(text);
-      projects[proj] = (projects[proj] || 0) + hours;
+      var str = String(text);
+
       totalHours += hours;
+      recordCount++;
+
+      if(str.indexOf("【デザイン】") !== -1){
+        designHours += hours;
+      } else {
+        otherHours += hours;
+      }
+
+      WORK_TAGS.forEach(function(tag){
+        if(str.indexOf("【" + tag + "】") !== -1){
+          tagHours[tag] = (tagHours[tag] || 0) + hours;
+        }
+      });
+
+      var proj = extractProjectName(str);
+      projects[proj] = (projects[proj] || 0) + hours;
+
+      INDIRECT_DEFS.forEach(function(def){
+        if(def.test.test(str)){
+          indirect[def.key] += hours;
+        }
+      });
     });
-    return { totalHours: totalHours, projects: projects };
+
+    return {
+      totalHours: totalHours,
+      recordCount: recordCount,
+      designHours: designHours,
+      otherHours: otherHours,
+      tagHours: tagHours,
+      projects: projects,
+      indirect: indirect
+    };
   }
 
   function uniqueDesignerName(base){
@@ -1685,59 +1744,93 @@
     });
   }
 
-  function renderPerDesigner(names){
-    var wrap = document.getElementById("workloadPerDesigner");
-    wrap.innerHTML = "";
-    names.forEach(function(name){
-      var d = workload.designers[name];
-      var projList = Object.keys(d.projects).map(function(p){ return { name:p, hours:d.projects[p] }; });
-      projList.sort(function(a,b){ return b.hours - a.hours; });
-      var top = projList.slice(0, 8);
+  function renderDesignerReport(name, d){
+    var recordCount = d.recordCount || 0;
+    var totalHours = d.totalHours || 0;
+    var designHours = d.designHours || 0;
+    var otherHours = d.otherHours || 0;
+    var tagHours = d.tagHours || {};
+    var projects = d.projects || {};
+    var indirect = d.indirect || {};
 
-      var block = document.createElement("div");
-      block.className = "workload-designer-block";
-      var h3 = document.createElement("h3");
-      h3.innerHTML = escapeHtmlW(name) + ' <span class="total-hours">計 ' + formatH(d.totalHours) + 'h</span>';
-      block.appendChild(h3);
+    var designPct = totalHours > 0 ? Math.round((designHours / totalHours) * 100) : 0;
+    var otherPct = totalHours > 0 ? Math.round((otherHours / totalHours) * 100) : 0;
+    var otherBarPct = totalHours > 0 ? (100 - designPct) : 0;
 
-      var barsWrap = document.createElement("div");
-      barsWrap.className = "workload-bars";
-      var max = top.length ? top[0].hours : 0;
-      top.forEach(function(p, i){
-        barsWrap.appendChild(buildBarRow(p.name, p.hours, max, i === 0));
-      });
-      if(top.length === 0){
-        var empty = document.createElement("div");
-        empty.className = "empty-state";
-        empty.textContent = "有効な時間データがありません。";
-        barsWrap.appendChild(empty);
-      }
-      block.appendChild(barsWrap);
-      wrap.appendChild(block);
-    });
-  }
+    var tagEntries = Object.keys(tagHours).filter(function(k){ return tagHours[k] > 0; })
+      .map(function(k){ return { name:k, hours:tagHours[k] }; })
+      .sort(function(a,b){ return b.hours - a.hours; });
 
-  function renderOverallChart(names){
-    var wrap = document.getElementById("workloadOverallChart");
-    wrap.innerHTML = "";
-    var totals = {};
-    names.forEach(function(name){
-      var d = workload.designers[name];
-      Object.keys(d.projects).forEach(function(p){
-        totals[p] = (totals[p] || 0) + d.projects[p];
-      });
-    });
-    var list = Object.keys(totals).map(function(p){ return { name:p, hours: totals[p] }; });
-    list.sort(function(a,b){ return b.hours - a.hours; });
-    var top = list.slice(0, 12);
-    if(top.length === 0){
-      wrap.innerHTML = '<div class="empty-state">データがありません。</div>';
-      return;
+    var projList = Object.keys(projects).map(function(p){ return { name:p, hours:projects[p] }; });
+    projList.sort(function(a,b){ return b.hours - a.hours; });
+    var topProjects = projList.slice(0, 8);
+
+    var indirectEntries = INDIRECT_DEFS.filter(function(def){ return (indirect[def.key] || 0) > 0; });
+
+    var panel = document.createElement("div");
+    panel.className = "panel";
+
+    var html = "";
+    html += "<h2>" + escapeHtmlW(name) + "</h2>";
+
+    html += '<div class="workload-subsection"><h4>① 総稼働時間</h4>';
+    html += '<div class="result-row"><span>合計時間</span><b>' + formatH(totalHours) + 'h</b></div>';
+    html += '<div class="result-row"><span>記録数</span><b>' + recordCount + '件</b></div>';
+    html += '</div>';
+
+    html += '<div class="workload-subsection"><h4>② デザイン作業 vs それ以外</h4>';
+    html += '<div class="split-bar"><div class="seg-design" style="width:' + designPct + '%"></div><div class="seg-other" style="width:' + otherBarPct + '%"></div></div>';
+    html += '<div class="split-bar-legend"><span>デザイン作業 <b>' + formatH(designHours) + 'h(' + designPct + '%)</b></span><span>それ以外 <b>' + formatH(otherHours) + 'h(' + otherPct + '%)</b></span></div>';
+    html += '</div>';
+
+    html += '<div class="workload-subsection"><h4>③ 作業種別(タグ別)</h4>';
+    if(tagEntries.length === 0){
+      html += '<div class="empty-state">タグ付きの記録がありません。</div>';
+    } else {
+      html += '<div class="workload-bars" data-slot="tagBars"></div>';
+      html += '<div class="workload-note">※1件の記録に複数タグが含まれる場合、それぞれのタグに重複してカウントしています。</div>';
     }
-    var max = top[0].hours;
-    top.forEach(function(t, i){
-      wrap.appendChild(buildBarRow(t.name, t.hours, max, i === 0));
-    });
+    html += '</div>';
+
+    html += '<div class="workload-subsection"><h4>④ プロジェクト・プロダクト別 時間ランキング</h4>';
+    if(topProjects.length === 0){
+      html += '<div class="empty-state">有効な時間データがありません。</div>';
+    } else {
+      html += '<div class="workload-bars" data-slot="projectBars"></div>';
+    }
+    html += '</div>';
+
+    html += '<div class="workload-subsection"><h4>⑤ 間接業務・チーム貢献の内訳</h4>';
+    if(indirectEntries.length === 0){
+      html += '<div class="empty-state">該当する記録が見つかりませんでした。</div>';
+    } else {
+      html += '<div class="indirect-list">';
+      indirectEntries.forEach(function(def){
+        html += '<div class="indirect-row"><span>' + def.label + '</span><b>' + formatH(indirect[def.key]) + 'h</b></div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+
+    panel.innerHTML = html;
+
+    var tagSlot = panel.querySelector('[data-slot="tagBars"]');
+    if(tagSlot){
+      var maxTag = tagEntries.length ? tagEntries[0].hours : 0;
+      tagEntries.forEach(function(t, i){
+        tagSlot.appendChild(buildBarRow(t.name, t.hours, maxTag, i === 0));
+      });
+    }
+
+    var projSlot = panel.querySelector('[data-slot="projectBars"]');
+    if(projSlot){
+      var maxProj = topProjects.length ? topProjects[0].hours : 0;
+      topProjects.forEach(function(p, i){
+        projSlot.appendChild(buildBarRow(p.name, p.hours, maxProj, i === 0));
+      });
+    }
+
+    return panel;
   }
 
   function renderWorkload(){
@@ -1745,14 +1838,17 @@
     var hasData = names.length > 0;
 
     document.getElementById("workloadSummaryPanel").hidden = !hasData;
-    document.getElementById("workloadPerDesignerPanel").hidden = !hasData;
-    document.getElementById("workloadOverallPanel").hidden = !hasData;
 
     renderFileList();
+
+    var reportsWrap = document.getElementById("workloadDesignerReports");
+    reportsWrap.innerHTML = "";
     if(!hasData) return;
+
+    names.forEach(function(name){
+      reportsWrap.appendChild(renderDesignerReport(name, workload.designers[name]));
+    });
     renderTotalsChart(names);
-    renderPerDesigner(names);
-    renderOverallChart(names);
   }
 
   document.getElementById("workloadFileInput").addEventListener("change", function(e){
