@@ -339,25 +339,13 @@
   .workload-bar-track{ background:var(--panel-border); border-radius:999px; height:10px; overflow:hidden; }
   .workload-bar-fill{ height:100%; background:var(--accent); border-radius:999px; }
   .workload-bar-fill.rank1{ background:var(--accent-dark); }
-  .workload-subsection{ margin-top:18px; }
-  .workload-subsection:first-of-type{ margin-top:0; }
-  .workload-subsection h4{ font-size:.8rem; color:var(--accent-dark); margin:0 0 8px; font-weight:700; }
-  .workload-note{ font-size:.68rem; color:var(--ink-soft); margin-top:6px; }
-  .split-bar{ display:flex; height:14px; border-radius:999px; overflow:hidden; background:var(--panel-border); }
-  .split-bar .seg-design{ background:var(--accent); }
-  .split-bar .seg-other{ background:var(--gray); }
-  .split-bar-legend{
-    display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;
-    font-size:.78rem; color:var(--ink-soft); margin-top:6px;
+  .workload-designer-block{ margin-bottom:20px; }
+  .workload-designer-block:last-child{ margin-bottom:0; }
+  .workload-designer-block h3{
+    font-size:.88rem; color:var(--accent-dark); margin:0 0 8px;
+    display:flex; justify-content:space-between; align-items:baseline; gap:8px;
   }
-  .split-bar-legend b{ color:var(--ink); font-weight:700; }
-  .indirect-list{ display:flex; flex-direction:column; }
-  .indirect-row{
-    display:flex; justify-content:space-between; font-size:.82rem;
-    padding:7px 0; border-bottom:1px dashed var(--panel-border);
-  }
-  .indirect-row:last-child{ border-bottom:none; }
-  .indirect-row b{ color:var(--ink); }
+  .workload-designer-block h3 .total-hours{ font-size:.78rem; color:var(--ink-soft); font-weight:400; }
 
   /* map sections (current / ideal) */
   .section-header{
@@ -548,7 +536,7 @@
 
 <div class="container tab-panel" data-tab-panel="workload">
   <div class="panel">
-    <h2>タスク・稼働分析 <span class="sub">タイムログCSVから稼働の内訳を段階的に可視化</span></h2>
+    <h2>タスク・稼働分析 <span class="sub">タイムログCSVからプロジェクト別の時間配分を可視化</span></h2>
     <div class="workload-upload">
       <label class="upload-drop" for="workloadFileInput">
         <input type="file" id="workloadFileInput" accept=".csv" multiple class="file-input">
@@ -557,14 +545,22 @@
       <button type="button" class="danger small" id="btnClearWorkload">読み込みデータをすべて消す</button>
     </div>
     <div class="workload-file-list" id="workloadFileList"></div>
-    <p class="staffing-note">※列: Project / Text / Weekday / Date / Start time / Duration / Day accumulated / Location を想定した簡易CSVです。Text内の【デザイン】【制作】【神谷】のようなタグから作業種別・プロジェクトを簡易抽出するため、厳密な分類ではありません。ファイル名がそのままデザイナー名になります(下の一覧で変更可能)。</p>
+    <p class="staffing-note">※列: Project / Text / Weekday / Date / Start time / Duration / Day accumulated / Location を想定した簡易CSVです。プロジェクト名はTaskのText内から簡易抽出するため、厳密な分類ではありません。ファイル名がそのままデザイナー名になります(下の一覧で変更可能)。</p>
   </div>
 
-  <div id="workloadDesignerReports"></div>
-
   <div class="panel" id="workloadSummaryPanel" hidden>
-    <h2>デザイナー間の総稼働時間の比較</h2>
+    <h2>デザイナー別 総稼働時間</h2>
     <div class="workload-bars" id="workloadTotalsChart"></div>
+  </div>
+
+  <div class="panel" id="workloadPerDesignerPanel" hidden>
+    <h2>デザイナー別 プロジェクト時間ランキング</h2>
+    <div id="workloadPerDesigner"></div>
+  </div>
+
+  <div class="panel" id="workloadOverallPanel" hidden>
+    <h2>全員合算 プロジェクト別総時間</h2>
+    <div class="workload-bars" id="workloadOverallChart"></div>
   </div>
 </div>
 
@@ -761,3 +757,1440 @@
   function fromSvgX(px){ return clamp(Math.round(((px - PAD) / (VB - PAD*2)) * 100), 0, 100); }
   function fromSvgY(py){ return clamp(Math.round((((VB - PAD) - py) / (VB - PAD*2)) * 100), 0, 100); }
   function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function el(tag, attrs){
+    var e = document.createElementNS(svgNS, tag);
+    for(var k in attrs){ e.setAttribute(k, attrs[k]); }
+    return e;
+  }
+
+  function renderMap(){
+    svg.innerHTML = "";
+    svg.setAttribute("viewBox", "0 0 " + VB + " " + VB);
+
+    var mid = VB/2;
+    var plotMin = PAD, plotMax = VB - PAD;
+
+    // quadrant backgrounds
+    var qColors = ["#f3ede0","#eef1e9","#efe9df","#f6efe3"];
+    svg.appendChild(el("rect",{x:plotMin,y:plotMin,width:mid-plotMin,height:mid-plotMin,fill:"#eef1e9",opacity:0.55})); // top-left
+    svg.appendChild(el("rect",{x:mid,y:plotMin,width:plotMax-mid,height:mid-plotMin,fill:"#f6ecd3",opacity:0.6})); // top-right (统括候補ゾーン)
+    svg.appendChild(el("rect",{x:plotMin,y:mid,width:mid-plotMin,height:plotMax-mid,fill:"#f3ede0",opacity:0.45})); // bottom-left
+    svg.appendChild(el("rect",{x:mid,y:mid,width:plotMax-mid,height:plotMax-mid,fill:"#efe9df",opacity:0.45})); // bottom-right
+
+    // outer border
+    svg.appendChild(el("rect",{x:plotMin,y:plotMin,width:plotMax-plotMin,height:plotMax-plotMin,fill:"none",stroke:"#ddd3bf","stroke-width":1.2}));
+
+    // center lines
+    svg.appendChild(el("line",{x1:mid,y1:plotMin,x2:mid,y2:plotMax,stroke:"#ddd3bf","stroke-width":1,"stroke-dasharray":"4,4"}));
+    svg.appendChild(el("line",{x1:plotMin,y1:mid,x2:plotMax,y2:mid,stroke:"#ddd3bf","stroke-width":1,"stroke-dasharray":"4,4"}));
+
+    // 統括候補ゾーン label (top-right)
+    var zoneLabel = el("text",{x:plotMax-8,y:plotMin+22,"text-anchor":"end","font-size":"13","font-weight":"700",fill:"#a5793c"});
+    zoneLabel.textContent = "統括候補ゾーン";
+    svg.appendChild(zoneLabel);
+    var zoneRect = el("rect",{x:mid+ (plotMax-mid)*0.15, y:plotMin, width:(plotMax-mid)*0.85, height:(mid-plotMin)*0.55, fill:"none", stroke:"#c9a25a","stroke-width":1,"stroke-dasharray":"3,3", opacity:0.7});
+    svg.appendChild(zoneRect);
+
+    // axis labels
+    function axisText(x,y,anchor,txt,weight){
+      var t = el("text",{x:x,y:y,"text-anchor":anchor,"font-size":"13",fill:"#6b6354","font-weight":weight||"600"});
+      t.textContent = txt;
+      svg.appendChild(t);
+    }
+    axisText(plotMin+2, VB-14, "start", "← " + data.axis.left);
+    axisText(plotMax-2, VB-14, "end", data.axis.right + " →");
+    axisText(plotMin-8, plotMin+4, "start", "↑ " + data.axis.top);
+    var g2 = el("text",{x:plotMin-8,y:plotMax,"text-anchor":"start","font-size":"13",fill:"#6b6354","font-weight":"600"});
+    g2.textContent = "↓ " + data.axis.bottom;
+    svg.appendChild(g2);
+
+    // points
+    var allPoints = data.members;
+    allPoints.forEach(function(m){
+      var cx = toSvgX(m.x), cy = toSvgY(m.y);
+      var color = STATUS_COLORS[m.status] || STATUS_COLORS.gray;
+      var g = el("g",{ "data-id": m.id, style:"cursor:pointer;" });
+
+      var r = m.candidate ? 15 : 14;
+      var circle = el("circle",{cx:cx, cy:cy, r:r, fill: m.candidate ? "#fffefb" : color,
+        stroke: color, "stroke-width": m.candidate ? 2.4 : 1.5,
+        "stroke-dasharray": m.candidate ? "5,4" : "none", opacity: m.candidate ? 0.95 : 1 });
+      g.appendChild(circle);
+
+      if(selectedId === m.id){
+        var ring = el("circle",{cx:cx, cy:cy, r:r+5, fill:"none", stroke:"#8a6d4c", "stroke-width":2, "stroke-dasharray":"2,3"});
+        g.appendChild(ring);
+      }
+
+      var label = el("text",{x:cx, y:cy+r+15, "text-anchor":"middle", "font-size":"12.5", fill:"#4a4436", "font-weight": m.candidate ? "600":"500"});
+      label.textContent = m.name + (m.candidate ? "(候補)" : "");
+      g.appendChild(label);
+
+      g.addEventListener("pointerdown", function(ev){
+        ev.preventDefault();
+        dragging = { id: m.id, pointerId: ev.pointerId };
+        svg.setPointerCapture(ev.pointerId);
+        selectedId = m.id;
+        renderAll();
+      });
+      g.addEventListener("click", function(ev){
+        ev.stopPropagation();
+      });
+
+      svg.appendChild(g);
+    });
+
+    svg.onpointermove = function(ev){
+      if(!dragging) return;
+      var rect = svg.getBoundingClientRect();
+      var scale = VB / rect.width;
+      var px = (ev.clientX - rect.left) * scale;
+      var py = (ev.clientY - rect.top) * scale;
+      var m = findMember(dragging.id);
+      if(!m) return;
+      m.x = fromSvgX(px);
+      m.y = fromSvgY(py);
+      renderMap();
+      if(editingId === null && selectedId === m.id){
+        updateDetailValuesOnly(m);
+      }
+    };
+    function endDrag(){
+      if(dragging){ saveData(); dragging = null; renderAll(); }
+    }
+    svg.onpointerup = endDrag;
+    svg.onpointercancel = endDrag;
+
+    svg.onclick = function(ev){
+      if(ev.target === svg){
+        selectedId = null;
+        renderAll();
+      }
+    };
+  }
+
+  function findMember(id){
+    return data.members.find(function(m){ return m.id === id; });
+  }
+
+  /* ---------------- Member list ---------------- */
+  function renderMemberList(){
+    var list = document.getElementById("memberList");
+    list.innerHTML = "";
+    if(data.members.length === 0){
+      list.innerHTML = '<div class="empty-state">メンバーがいません。追加してください。</div>';
+      return;
+    }
+    data.members.forEach(function(m){
+      var row = document.createElement("div");
+      row.className = "member-row";
+      row.innerHTML =
+        '<span class="name"><span class="status-dot" style="background:' + (STATUS_COLORS[m.status]||STATUS_COLORS.gray) + '"></span>' +
+        escapeHtml(m.name) + (m.candidate ? ' <span class="tag">(候補)</span>' : '') + '</span>' +
+        '<span class="tag">' + m.x + ' / ' + m.y + '</span>';
+      row.addEventListener("click", function(){
+        selectedId = m.id;
+        renderAll();
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function escapeHtml(str){
+    var d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
+
+  /* ---------------- Detail Panel ---------------- */
+  function renderDetail(){
+    var panel = document.getElementById("detailPanel");
+    var body = document.getElementById("detailBody");
+    var title = document.getElementById("detailTitle");
+    if(!selectedId){
+      panel.classList.add("hidden");
+      return;
+    }
+    var m = findMember(selectedId);
+    if(!m){
+      panel.classList.add("hidden");
+      return;
+    }
+    panel.classList.remove("hidden");
+    title.textContent = m.name + (m.candidate ? "(採用候補)" : "");
+    body.innerHTML =
+      '<div class="field"><label>' + escapeHtml(data.axis.left) + ' ← → ' + escapeHtml(data.axis.right) + '</label><div>' + m.x + ' / 100</div></div>' +
+      '<div class="field"><label>' + escapeHtml(data.axis.bottom) + ' ← → ' + escapeHtml(data.axis.top) + '</label><div>' + m.y + ' / 100</div></div>' +
+      '<div class="field"><label>稼働状況</label><div>' + STATUS_LABEL[m.status] + '</div></div>' +
+      '<div class="field"><label>強み</label><div>' + escapeHtml(m.strength||"—") + '</div></div>' +
+      '<div class="field"><label>志向</label><div>' + escapeHtml(m.orientation||"—") + '</div></div>' +
+      '<div class="field"><label>メモ</label><div>' + escapeHtml(m.memo||"—") + '</div></div>' +
+      '<div class="form-actions">' +
+        '<button class="small" id="btnEditThis">編集</button>' +
+        (m.candidate ? '<button class="small primary" id="btnConfirmCandidate">この候補を確定(実在メンバーに変換)</button><button class="small danger" id="btnRemoveCandidate">候補を消す</button>' :
+          '<button class="small danger" id="btnDeleteThis">削除</button>') +
+      '</div>';
+
+    var editBtn = document.getElementById("btnEditThis");
+    if(editBtn) editBtn.addEventListener("click", function(){ openEditModal(m.id); });
+    var delBtn = document.getElementById("btnDeleteThis");
+    if(delBtn) delBtn.addEventListener("click", function(){
+      if(confirm(m.name + "を削除しますか？")){
+        data.members = data.members.filter(function(x){ return x.id !== m.id; });
+        selectedId = null;
+        saveData();
+        renderAll();
+      }
+    });
+    var confirmBtn = document.getElementById("btnConfirmCandidate");
+    if(confirmBtn) confirmBtn.addEventListener("click", function(){
+      m.candidate = false;
+      saveData();
+      toast(m.name + "を実在メンバーに変換しました");
+      renderAll();
+    });
+    var removeBtn = document.getElementById("btnRemoveCandidate");
+    if(removeBtn) removeBtn.addEventListener("click", function(){
+      data.members = data.members.filter(function(x){ return x.id !== m.id; });
+      selectedId = null;
+      saveData();
+      renderAll();
+    });
+  }
+
+  function updateDetailValuesOnly(m){
+    // lightweight refresh while dragging (avoid full re-render flicker)
+    renderDetail();
+  }
+
+  /* ---------------- Edit Modal ---------------- */
+  var modal = document.getElementById("editModal");
+  var f_name = document.getElementById("f_name");
+  var f_x = document.getElementById("f_x");
+  var f_y = document.getElementById("f_y");
+  var f_strength = document.getElementById("f_strength");
+  var f_orientation = document.getElementById("f_orientation");
+  var f_memo = document.getElementById("f_memo");
+  var statusOpts = document.querySelectorAll(".status-opt");
+  var currentStatus = "gray";
+
+  statusOpts.forEach(function(opt){
+    opt.addEventListener("click", function(){
+      currentStatus = opt.getAttribute("data-status");
+      statusOpts.forEach(function(o){ o.classList.remove("active"); });
+      opt.classList.add("active");
+    });
+  });
+
+  function openEditModal(id){
+    editingId = id || null;
+    document.getElementById("f_xLabel").textContent = data.axis.left + "軸 値 (0=" + data.axis.left + " / 100=" + data.axis.right + ")";
+    document.getElementById("f_yLabel").textContent = data.axis.bottom + "軸 値 (0=" + data.axis.bottom + " / 100=" + data.axis.top + ")";
+    if(id){
+      var m = findMember(id);
+      document.getElementById("modalTitle").textContent = "メンバーを編集";
+      f_name.value = m.name;
+      f_x.value = m.x;
+      f_y.value = m.y;
+      f_strength.value = m.strength || "";
+      f_orientation.value = m.orientation || "";
+      f_memo.value = m.memo || "";
+      currentStatus = m.status;
+    } else {
+      document.getElementById("modalTitle").textContent = "メンバーを追加";
+      f_name.value = "";
+      f_x.value = "50";
+      f_y.value = "50";
+      f_strength.value = "";
+      f_orientation.value = "";
+      f_memo.value = "";
+      currentStatus = "gray";
+    }
+    statusOpts.forEach(function(o){
+      o.classList.toggle("active", o.getAttribute("data-status") === currentStatus);
+    });
+    modal.classList.remove("hidden");
+  }
+
+  function closeModal(){
+    modal.classList.add("hidden");
+    editingId = null;
+  }
+
+  document.getElementById("btnCancelModal").addEventListener("click", closeModal);
+  document.getElementById("btnAddMember").addEventListener("click", function(){ openEditModal(null); });
+
+  document.getElementById("btnSaveMember").addEventListener("click", function(){
+    var name = f_name.value.trim();
+    if(!name){ alert("名前を入力してください"); return; }
+    var x = clamp(parseInt(f_x.value,10) || 0, 0, 100);
+    var y = clamp(parseInt(f_y.value,10) || 0, 0, 100);
+
+    if(editingId){
+      var m = findMember(editingId);
+      m.name = name; m.x = x; m.y = y; m.status = currentStatus;
+      m.strength = f_strength.value.trim();
+      m.orientation = f_orientation.value.trim();
+      m.memo = f_memo.value.trim();
+    } else {
+      var newM = {
+        id: uid(), name:name, x:x, y:y, status:currentStatus,
+        strength: f_strength.value.trim(), orientation: f_orientation.value.trim(),
+        memo: f_memo.value.trim(), candidate:false
+      };
+      data.members.push(newM);
+      selectedId = newM.id;
+    }
+    saveData();
+    closeModal();
+    renderAll();
+  });
+
+  /* ---------------- Quadrant analysis ---------------- */
+  function getQuadrant(m){
+    // 0: top-left (creative/mgmt), 1: top-right (number/mgmt = 統括候補ゾーン)
+    // 2: bottom-left (creative/player), 3: bottom-right (number/player)
+    var right = m.x >= 50, top = m.y >= 50;
+    if(top && !right) return 0;
+    if(top && right) return 1;
+    if(!top && !right) return 2;
+    return 3;
+  }
+
+  var QUADRANT_NAMES = [
+    function(){ return data.axis.left + "×" + data.axis.top; },
+    function(){ return data.axis.right + "×" + data.axis.top + "(統括候補ゾーン)"; },
+    function(){ return data.axis.left + "×" + data.axis.bottom; },
+    function(){ return data.axis.right + "×" + data.axis.bottom; }
+  ];
+
+  function quadrantCounts(members){
+    var counts = [0,0,0,0];
+    members.forEach(function(m){ counts[getQuadrant(m)]++; });
+    return counts;
+  }
+
+  function renderQuadrants(){
+    var real = data.members.filter(function(m){ return !m.candidate; });
+    var counts = quadrantCounts(real);
+    var box = document.getElementById("quadrantBadges");
+    box.innerHTML = "";
+    var order = [0,1,2,3];
+    order.forEach(function(qi){
+      var c = counts[qi];
+      var cls = c === 0 ? "empty" : (c === 1 ? "thin" : "ok");
+      var div = document.createElement("div");
+      div.className = "qbadge " + cls;
+      div.innerHTML = '<div class="qtitle">' + QUADRANT_NAMES[qi]() + '</div><div class="qcount">' + c + '名</div>';
+      box.appendChild(div);
+    });
+
+    var zoneMembers = real.filter(function(m){ return getQuadrant(m) === 1; });
+    var note = document.getElementById("zoneNote");
+    if(zoneMembers.length === 0){
+      note.innerHTML = "⚠ 現在、統括候補ゾーン(" + data.axis.right + "×" + data.axis.top + ")には誰もいません。組織の意思決定・数字統括を担える人材が手薄です。";
+    } else {
+      // find closest to the ideal corner (100,100)
+      var closest = zoneMembers.slice().sort(function(a,b){
+        var da = Math.hypot(100-a.x, 100-a.y), db = Math.hypot(100-b.x, 100-b.y);
+        return da - db;
+      })[0];
+      note.innerHTML = "統括候補ゾーンには " + zoneMembers.map(function(m){return escapeHtml(m.name);}).join("、") +
+        " がいます。最も近いのは「" + escapeHtml(closest.name) + "」(稼働: " + STATUS_LABEL[closest.status] + ")。";
+    }
+  }
+
+  /* ---------------- Presets (candidates) ---------------- */
+  var PRESETS = [
+    { key:"leader", label:"数字型リーダー候補", desc: "数字×マネジメント", x:78, y:80, status:"green" },
+    { key:"junior", label:"若手クリエイター候補", desc:"クリエイティブ×プレイヤー", x:22, y:22, status:"green" },
+    { key:"exec", label:"即戦力実務デザイナー候補", desc:"中央×プレイヤー・稼働余力大", x:50, y:22, status:"green" },
+    { key:"creative_lead", label:"クリエイティブ統括候補", desc:"クリエイティブ×マネジメント", x:22, y:80, status:"green" },
+    { key:"custom", label:"自由入力", desc:"任意の位置に配置", x:50, y:50, status:"gray" }
+  ];
+
+  function renderPresets(){
+    var grid = document.getElementById("presetGrid");
+    grid.innerHTML = "";
+    PRESETS.forEach(function(p){
+      var btn = document.createElement("button");
+      btn.className = "preset-btn";
+      btn.innerHTML = "<b>" + p.label + "</b>" + p.desc;
+      btn.addEventListener("click", function(){
+        if(p.key === "custom"){
+          var newM = { id: uid(), name:"候補", x:50, y:50, status:"gray", strength:"", orientation:"", memo:"", candidate:true };
+          data.members.push(newM);
+          selectedId = newM.id;
+          saveData();
+          renderAll();
+          openEditModal(newM.id);
+        } else {
+          var newM2 = { id: uid(), name:p.label, x:p.x, y:p.y, status:p.status, strength:"", orientation:p.desc, memo:"シミュレーション候補", candidate:true };
+          data.members.push(newM2);
+          selectedId = newM2.id;
+          saveData();
+          renderAll();
+        }
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  document.getElementById("btnClearCandidates").addEventListener("click", function(){
+    var hadCandidates = data.members.some(function(m){ return m.candidate; });
+    if(!hadCandidates) return;
+    data.members = data.members.filter(function(m){ return !m.candidate; });
+    selectedId = null;
+    saveData();
+    renderAll();
+  });
+
+  /* ---------------- Change Report ---------------- */
+  function centroid(members){
+    if(members.length === 0) return {x:50,y:50};
+    var sx=0, sy=0;
+    members.forEach(function(m){ sx += m.x; sy += m.y; });
+    return { x: sx/members.length, y: sy/members.length };
+  }
+
+  function statusCounts(members){
+    var c = {green:0, yellow:0, red:0, gray:0};
+    members.forEach(function(m){ c[m.status] = (c[m.status]||0) + 1; });
+    return c;
+  }
+
+  function renderReport(){
+    var content = document.getElementById("reportContent");
+    var candidates = data.members.filter(function(m){ return m.candidate; });
+    var real = data.members.filter(function(m){ return !m.candidate; });
+
+    if(candidates.length === 0){
+      content.innerHTML = '<div class="empty-state">まだ採用候補が配置されていません。右側の「採用シミュレーション」から候補を置くと、変化レポートが表示されます。</div>';
+      return;
+    }
+
+    var before = real;
+    var after = real.concat(candidates);
+
+    var beforeCounts = quadrantCounts(before);
+    var afterCounts = quadrantCounts(after);
+
+    var html = "";
+
+    // 1. distribution change
+    var filledQuadrants = [];
+    QUADRANT_NAMES.forEach(function(nameFn, qi){
+      if(beforeCounts[qi] === 0 && afterCounts[qi] > 0){
+        filledQuadrants.push(nameFn());
+      }
+    });
+    html += "<h3>① 分布の変化</h3><ul>";
+    if(filledQuadrants.length > 0){
+      html += "<li>これまで空白だった「" + filledQuadrants.map(escapeHtml).join("」「") + "」が埋まります。</li>";
+    } else {
+      html += "<li>候補は既存の分布があるゾーンに重なって配置されます(新たにゼロから埋まる象限はありません)。</li>";
+    }
+    var cent0 = centroid(before), cent1 = centroid(after);
+    var dx = (cent1.x - cent0.x).toFixed(1), dy = (cent1.y - cent0.y).toFixed(1);
+    html += "<li>チーム全体の重心は (" + cent0.x.toFixed(0) + "," + cent0.y.toFixed(0) + ") → (" + cent1.x.toFixed(0) + "," + cent1.y.toFixed(0) + ") に移動 " +
+      "(横方向 " + (dx>=0?"+":"") + dx + " / 縦方向 " + (dy>=0?"+":"") + dy + ")。";
+    if(Math.abs(dx) > Math.abs(dy)){
+      html += dx > 0 ? data.axis.right + "寄りへシフトします。" : data.axis.left + "寄りへシフトします。";
+    } else {
+      html += dy > 0 ? data.axis.top + "寄りへシフトします。" : data.axis.bottom + "寄りへシフトします。";
+    }
+    html += "</li></ul>";
+
+    // 2. quadrant balance before/after
+    html += "<h3>② 4象限バランス(前→後)</h3><ul>";
+    QUADRANT_NAMES.forEach(function(nameFn, qi){
+      html += "<li>" + nameFn() + "： " + beforeCounts[qi] + "名 → " + afterCounts[qi] + "名" +
+        (afterCounts[qi] > beforeCounts[qi] ? "(+" + (afterCounts[qi]-beforeCounts[qi]) + ")" : "") + "</li>";
+    });
+    html += "</ul>";
+
+    // 3. 統括候補ゾーン充足判定
+    var zoneBefore = before.filter(function(m){ return getQuadrant(m) === 1; });
+    var zoneAfter = after.filter(function(m){ return getQuadrant(m) === 1; });
+    var reiZoneCandidate = zoneAfter.filter(function(m){ return getQuadrant(m)===1; })
+      .sort(function(a,b){ return Math.hypot(100-a.x,100-a.y) - Math.hypot(100-b.x,100-b.y); })[0];
+
+    html += "<h3>③ 役割の充足(統括候補ゾーン)</h3>";
+    if(zoneAfter.length > zoneBefore.length){
+      html += '<div class="highlight-box">統括候補ゾーンに新たな人材が加わります。' +
+        (reiZoneCandidate ? "最有力候補は「" + escapeHtml(reiZoneCandidate.name) + "」です。" : "") +
+        "伴野(Rei)のディレクション業務を渡せる状態に<b>近づく</b>可能性があります。ただし実際の権限移譲には経験・信頼の蓄積が必要です。</div>";
+    } else if(zoneAfter.length === zoneBefore.length && zoneAfter.length > 0){
+      html += "<p>統括候補ゾーンの人数に変化はありません。既存の候補(" + zoneAfter.map(function(m){return escapeHtml(m.name);}).join("、") +
+        ")の育成が引き続きRei からの権限移譲の鍵になります。</p>";
+    } else {
+      html += "<p>今回の候補は統括候補ゾーンには入りません。Reiのディレクション業務の移譲には直接寄与しない配置です。</p>";
+    }
+
+    // 4. workload change
+    html += "<h3>④ 負荷の変化</h3><ul>";
+    var beforeStatus = statusCounts(before);
+    var candidateGreenPlayer = candidates.filter(function(c){
+      return c.status === "green" && getQuadrant(c) === 3; // number x player, or generally player row
+    });
+    var candidatePlayerAny = candidates.filter(function(c){ return c.y < 50 && c.status !== "red"; });
+    if(candidatePlayerAny.length > 0){
+      html += "<li>候補(" + candidatePlayerAny.map(function(m){return escapeHtml(m.name);}).join("、") +
+        ")は実務層(プレイヤー)かつ稼働に余力があるため、飽和しているリーダー層(安井・柳・伴野)の実務を分担でき、余白が生まれる可能性があります。</li>";
+    } else {
+      html += "<li>候補は主にマネジメント層への配置であり、既存メンバーの実務負荷そのものはすぐには軽減されません。</li>";
+    }
+    var redCount = beforeStatus.red;
+    html += "<li>現在、稼働が赤(飽和)のメンバーは " + redCount + "名。実務移譲が進めば、この負荷分散が焦点になります。</li>";
+    html += "</ul>";
+
+    // 5. remaining gaps
+    html += "<h3>⑤ 残る穴</h3><ul>";
+    var gaps = [];
+    QUADRANT_NAMES.forEach(function(nameFn, qi){
+      if(afterCounts[qi] === 0){ gaps.push(nameFn()); }
+    });
+    if(gaps.length > 0){
+      html += "<li>候補配置後も「" + gaps.map(escapeHtml).join("」「") + "」は空白のままです。</li>";
+    } else {
+      html += "<li>4象限すべてに最低1名は配置される見込みです。</li>";
+    }
+    var grayReal = real.filter(function(m){ return m.status === "gray"; });
+    if(grayReal.length > 0){
+      html += "<li>稼働状況が「不明」のメンバー(" + grayReal.map(function(m){return escapeHtml(m.name);}).join("、") + ")の評価は依然として課題です。</li>";
+    }
+    html += "</ul>";
+
+    content.innerHTML = html;
+  }
+
+  /* ---------------- Export / Import / Reset ---------------- */
+  document.getElementById("btnExport").addEventListener("click", function(){
+    var idealRaw = null;
+    try{ idealRaw = JSON.parse(localStorage.getItem("team-simulator-ideal-data-v1") || "null"); }catch(e){ idealRaw = null; }
+    var exportPayload = { current: data, ideal: (idealRaw && idealRaw.members) ? idealRaw : { members: [] } };
+    var blob = new Blob([JSON.stringify(exportPayload, null, 2)], {type:"application/json"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "team-simulator-data.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("エクスポートしました");
+  });
+
+  var fileInput = document.getElementById("fileInput");
+  document.getElementById("btnImport").addEventListener("click", function(){
+    fileInput.value = "";
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", function(){
+    var file = fileInput.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e){
+      try{
+        var parsed = JSON.parse(e.target.result);
+        var currentPart = null, idealPart = null;
+        if(parsed.current && parsed.current.axis && parsed.current.members){
+          currentPart = parsed.current;
+          idealPart = (parsed.ideal && parsed.ideal.members) ? parsed.ideal : { members: [] };
+        } else if(parsed.axis && parsed.members){
+          currentPart = parsed;
+        } else {
+          throw new Error("invalid");
+        }
+        data = currentPart;
+        selectedId = null;
+        saveData();
+        refreshAxisInputs();
+        renderAll();
+        if(idealPart){
+          localStorage.setItem("team-simulator-ideal-data-v1", JSON.stringify(idealPart));
+          try{ window.dispatchEvent(new CustomEvent("team-sim:ideal-imported")); }catch(err2){}
+        }
+        toast("インポートしました");
+      }catch(err){
+        alert("読み込みに失敗しました。正しいJSONファイルか確認してください。");
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById("btnReset").addEventListener("click", function(){
+    if(confirm("すべてのデータを初期状態に戻します。よろしいですか？")){
+      data = defaultData();
+      selectedId = null;
+      saveData();
+      refreshAxisInputs();
+      renderAll();
+      toast("リセットしました");
+    }
+  });
+
+  /* ---------------- Render orchestration ---------------- */
+  function renderAll(){
+    renderMap();
+    renderMemberList();
+    renderDetail();
+    renderQuadrants();
+    renderReport();
+  }
+
+  refreshAxisInputs();
+  renderPresets();
+  renderAll();
+
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+
+  var STAFFING_KEY = "team-simulator-staffing-v1";
+
+  function defaultStaffing(){
+    return { devs:8, launchPerDev:2, designerCap:2, currentDesigners:5 };
+  }
+
+  function loadStaffing(){
+    try{
+      var raw = localStorage.getItem(STAFFING_KEY);
+      if(!raw) return defaultStaffing();
+      var parsed = JSON.parse(raw);
+      var def = defaultStaffing();
+      return {
+        devs: typeof parsed.devs === "number" ? parsed.devs : def.devs,
+        launchPerDev: typeof parsed.launchPerDev === "number" ? parsed.launchPerDev : def.launchPerDev,
+        designerCap: typeof parsed.designerCap === "number" ? parsed.designerCap : def.designerCap,
+        currentDesigners: typeof parsed.currentDesigners === "number" ? parsed.currentDesigners : def.currentDesigners
+      };
+    }catch(e){
+      return defaultStaffing();
+    }
+  }
+
+  var staffing = loadStaffing();
+
+  function saveStaffing(){
+    localStorage.setItem(STAFFING_KEY, JSON.stringify(staffing));
+  }
+
+  var els = {
+    devsSlider: document.getElementById("devsSlider"),
+    devsNumber: document.getElementById("devsNumber"),
+    devsValue: document.getElementById("devsValue"),
+    launchPerDevSlider: document.getElementById("launchPerDevSlider"),
+    launchPerDevNumber: document.getElementById("launchPerDevNumber"),
+    launchPerDevValue: document.getElementById("launchPerDevValue"),
+    designerCapSlider: document.getElementById("designerCapSlider"),
+    designerCapNumber: document.getElementById("designerCapNumber"),
+    designerCapValue: document.getElementById("designerCapValue"),
+    currentDesignersSlider: document.getElementById("currentDesignersSlider"),
+    currentDesignersNumber: document.getElementById("currentDesignersNumber"),
+    currentDesignersValue: document.getElementById("currentDesignersValue"),
+    totalLaunchesOut: document.getElementById("totalLaunchesOut"),
+    neededDesignersOut: document.getElementById("neededDesignersOut"),
+    gapDisplay: document.getElementById("gapDisplay"),
+    gapValueOut: document.getElementById("gapValueOut")
+  };
+
+  function clampNum(v, min, max){
+    if(isNaN(v)) return min;
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function formatNum(v){
+    return (Math.round(v * 10) / 10).toString();
+  }
+
+  function syncInputs(){
+    els.devsSlider.value = staffing.devs;
+    els.devsNumber.value = staffing.devs;
+    els.devsValue.textContent = staffing.devs;
+
+    els.launchPerDevSlider.value = staffing.launchPerDev;
+    els.launchPerDevNumber.value = formatNum(staffing.launchPerDev);
+    els.launchPerDevValue.textContent = formatNum(staffing.launchPerDev);
+
+    els.designerCapSlider.value = staffing.designerCap;
+    els.designerCapNumber.value = formatNum(staffing.designerCap);
+    els.designerCapValue.textContent = formatNum(staffing.designerCap);
+
+    els.currentDesignersSlider.value = staffing.currentDesigners;
+    els.currentDesignersNumber.value = staffing.currentDesigners;
+    els.currentDesignersValue.textContent = staffing.currentDesigners;
+  }
+
+  function render(){
+    var totalLaunches = staffing.devs * staffing.launchPerDev;
+    var neededDesigners = staffing.designerCap > 0 ? totalLaunches / staffing.designerCap : 0;
+    var gap = neededDesigners - staffing.currentDesigners;
+    var roundedGap = Math.round(gap * 10) / 10;
+
+    els.totalLaunchesOut.textContent = formatNum(totalLaunches) + "商品";
+    els.neededDesignersOut.textContent = formatNum(neededDesigners) + "人";
+
+    els.gapDisplay.classList.remove("shortage", "surplus", "balanced");
+    if(roundedGap > 0.05){
+      els.gapDisplay.classList.add("shortage");
+      els.gapValueOut.textContent = "あと" + formatNum(gap) + "人不足";
+    } else if(roundedGap < -0.05){
+      els.gapDisplay.classList.add("surplus");
+      els.gapValueOut.textContent = formatNum(Math.abs(gap)) + "人 余剰(充足)";
+    } else {
+      els.gapDisplay.classList.add("balanced");
+      els.gapValueOut.textContent = "充足";
+    }
+  }
+
+  function update(){
+    saveStaffing();
+    syncInputs();
+    render();
+  }
+
+  function bindPair(slider, number, key, min, max, isInt){
+    slider.addEventListener("input", function(){
+      var v = parseFloat(slider.value);
+      staffing[key] = isInt ? Math.round(v) : v;
+      update();
+    });
+    number.addEventListener("change", function(){
+      var v = clampNum(parseFloat(number.value), min, max);
+      staffing[key] = isInt ? Math.round(v) : v;
+      update();
+    });
+  }
+
+  bindPair(els.devsSlider, els.devsNumber, "devs", 1, 50, true);
+  bindPair(els.launchPerDevSlider, els.launchPerDevNumber, "launchPerDev", 0.5, 10, false);
+  bindPair(els.designerCapSlider, els.designerCapNumber, "designerCap", 0.5, 10, false);
+  bindPair(els.currentDesignersSlider, els.currentDesignersNumber, "currentDesigners", 0, 30, true);
+
+  syncInputs();
+  render();
+
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+
+  var TAB_KEY = "team-simulator-active-tab";
+  var buttons = document.querySelectorAll(".tab-btn");
+  var panels = document.querySelectorAll(".tab-panel");
+
+  function activate(tabKey){
+    panels.forEach(function(p){
+      p.classList.toggle("active", p.getAttribute("data-tab-panel") === tabKey);
+    });
+    buttons.forEach(function(b){
+      b.classList.toggle("active", b.getAttribute("data-tab") === tabKey);
+    });
+    try{ localStorage.setItem(TAB_KEY, tabKey); }catch(e){}
+  }
+
+  buttons.forEach(function(b){
+    b.addEventListener("click", function(){ activate(b.getAttribute("data-tab")); });
+  });
+
+  var saved = null;
+  try{ saved = localStorage.getItem(TAB_KEY); }catch(e){}
+  var savedPanel = saved ? document.querySelector('.tab-panel[data-tab-panel="' + saved + '"]') : null;
+  activate(savedPanel ? saved : "map");
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var WORKLOAD_KEY = "team-simulator-workload-v1";
+
+  function defaultWorkload(){ return { designers:{}, order:[] }; }
+
+  function loadWorkload(){
+    try{
+      var raw = localStorage.getItem(WORKLOAD_KEY);
+      if(!raw) return defaultWorkload();
+      var parsed = JSON.parse(raw);
+      if(!parsed.designers || !parsed.order) return defaultWorkload();
+      return parsed;
+    }catch(e){
+      return defaultWorkload();
+    }
+  }
+
+  var workload = loadWorkload();
+
+  function saveWorkload(){
+    localStorage.setItem(WORKLOAD_KEY, JSON.stringify(workload));
+  }
+
+  function escapeHtmlW(str){
+    var d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
+
+  function formatH(v){
+    return (Math.round(v * 10) / 10).toString();
+  }
+
+  /* Duration: hh:mm:ss / hh:mm strings parse directly; plain decimals are
+     treated as day-fraction exports (per the source spreadsheet) and ×24'd. */
+  function parseDuration(raw){
+    if(raw == null) return 0;
+    var s = String(raw).trim();
+    if(!s) return 0;
+    var m = s.match(/^(\d{1,3}):(\d{2})(?::(\d{2}))?$/);
+    if(m){
+      var h = parseInt(m[1],10), mi = parseInt(m[2],10), se = m[3] ? parseInt(m[3],10) : 0;
+      return h + mi/60 + se/3600;
+    }
+    var num = parseFloat(s.replace(",", "."));
+    if(isNaN(num)) return 0;
+    return num * 24;
+  }
+
+  /* Loose product/project name extraction from the free-text Text column,
+     since the tag column isn't consistently used. Not meant to be exact. */
+  function extractProjectName(text){
+    if(!text) return "(未分類)";
+    var t = String(text);
+    t = t.replace(/【[^】]*】?/g, " ");
+    t = t.trim();
+    if(!t) return "(未分類)";
+    var parts = t.split(/[\/／・:：\-–\|,、]+/).map(function(s){ return s.trim(); }).filter(Boolean);
+    var candidate = parts.length ? parts[0] : t;
+    if(candidate.length > 24) candidate = candidate.slice(0, 24) + "…";
+    return candidate || "(未分類)";
+  }
+
+  function aggregateRows(rows){
+    var totalHours = 0;
+    var projects = {};
+    rows.forEach(function(row){
+      var durationRaw = row["Duration"] || row["duration"] || row["DURATION"] || "";
+      var hours = parseDuration(durationRaw);
+      if(!hours || hours <= 0) return;
+      var text = row["Text"] || row["text"] || row["Project"] || row["project"] || "";
+      var proj = extractProjectName(text);
+      projects[proj] = (projects[proj] || 0) + hours;
+      totalHours += hours;
+    });
+    return { totalHours: totalHours, projects: projects };
+  }
+
+  function uniqueDesignerName(base){
+    var name = base;
+    var i = 2;
+    while(workload.designers[name]){
+      name = base + "(" + i + ")";
+      i++;
+    }
+    return name;
+  }
+
+  function handleFiles(fileList){
+    Array.prototype.forEach.call(fileList, function(file){
+      var rawName = file.name.replace(/\.csv$/i, "");
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results){
+          var agg = aggregateRows(results.data || []);
+          var name = uniqueDesignerName(rawName);
+          workload.designers[name] = agg;
+          workload.order.push(name);
+          saveWorkload();
+          renderWorkload();
+        },
+        error: function(){
+          alert(file.name + " の読み込みに失敗しました。CSV形式を確認してください。");
+        }
+      });
+    });
+  }
+
+  function renameDesigner(oldName, newName){
+    if(!newName || oldName === newName) { renderFileList(); return; }
+    if(workload.designers[newName]){
+      alert("同名のデザイナーが既に存在します");
+      renderFileList();
+      return;
+    }
+    workload.designers[newName] = workload.designers[oldName];
+    delete workload.designers[oldName];
+    workload.order = workload.order.map(function(n){ return n === oldName ? newName : n; });
+    saveWorkload();
+    renderWorkload();
+  }
+
+  function removeDesigner(name){
+    delete workload.designers[name];
+    workload.order = workload.order.filter(function(n){ return n !== name; });
+    saveWorkload();
+    renderWorkload();
+  }
+
+  function buildBarRow(label, hours, max, isTop){
+    var row = document.createElement("div");
+    row.className = "workload-bar-row";
+    var pct = max > 0 ? Math.max(4, Math.round((hours / max) * 100)) : 0;
+    row.innerHTML =
+      '<div class="workload-bar-label"><span>' + escapeHtmlW(label) + '</span><b>' + formatH(hours) + 'h</b></div>' +
+      '<div class="workload-bar-track"><div class="workload-bar-fill' + (isTop ? ' rank1' : '') + '" style="width:' + pct + '%"></div></div>';
+    return row;
+  }
+
+  function renderFileList(){
+    var wrap = document.getElementById("workloadFileList");
+    wrap.innerHTML = "";
+    workload.order.forEach(function(name){
+      var d = workload.designers[name];
+      if(!d) return;
+      var row = document.createElement("div");
+      row.className = "workload-file-row";
+      row.innerHTML =
+        '<input type="text" value="' + escapeHtmlW(name) + '">' +
+        '<span class="hours-tag">計 ' + formatH(d.totalHours) + 'h</span>' +
+        '<button type="button" class="small danger remove-btn">削除</button>';
+      var input = row.querySelector("input");
+      input.addEventListener("change", function(){
+        renameDesigner(name, input.value.trim());
+      });
+      row.querySelector(".remove-btn").addEventListener("click", function(){
+        removeDesigner(name);
+      });
+      wrap.appendChild(row);
+    });
+  }
+
+  function renderTotalsChart(names){
+    var wrap = document.getElementById("workloadTotalsChart");
+    wrap.innerHTML = "";
+    var totals = names.map(function(n){ return { name:n, hours: workload.designers[n].totalHours }; });
+    totals.sort(function(a,b){ return b.hours - a.hours; });
+    var max = totals.length ? totals[0].hours : 0;
+    totals.forEach(function(t, i){
+      wrap.appendChild(buildBarRow(t.name, t.hours, max, i === 0));
+    });
+  }
+
+  function renderPerDesigner(names){
+    var wrap = document.getElementById("workloadPerDesigner");
+    wrap.innerHTML = "";
+    names.forEach(function(name){
+      var d = workload.designers[name];
+      var projList = Object.keys(d.projects).map(function(p){ return { name:p, hours:d.projects[p] }; });
+      projList.sort(function(a,b){ return b.hours - a.hours; });
+      var top = projList.slice(0, 8);
+
+      var block = document.createElement("div");
+      block.className = "workload-designer-block";
+      var h3 = document.createElement("h3");
+      h3.innerHTML = escapeHtmlW(name) + ' <span class="total-hours">計 ' + formatH(d.totalHours) + 'h</span>';
+      block.appendChild(h3);
+
+      var barsWrap = document.createElement("div");
+      barsWrap.className = "workload-bars";
+      var max = top.length ? top[0].hours : 0;
+      top.forEach(function(p, i){
+        barsWrap.appendChild(buildBarRow(p.name, p.hours, max, i === 0));
+      });
+      if(top.length === 0){
+        var empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = "有効な時間データがありません。";
+        barsWrap.appendChild(empty);
+      }
+      block.appendChild(barsWrap);
+      wrap.appendChild(block);
+    });
+  }
+
+  function renderOverallChart(names){
+    var wrap = document.getElementById("workloadOverallChart");
+    wrap.innerHTML = "";
+    var totals = {};
+    names.forEach(function(name){
+      var d = workload.designers[name];
+      Object.keys(d.projects).forEach(function(p){
+        totals[p] = (totals[p] || 0) + d.projects[p];
+      });
+    });
+    var list = Object.keys(totals).map(function(p){ return { name:p, hours: totals[p] }; });
+    list.sort(function(a,b){ return b.hours - a.hours; });
+    var top = list.slice(0, 12);
+    if(top.length === 0){
+      wrap.innerHTML = '<div class="empty-state">データがありません。</div>';
+      return;
+    }
+    var max = top[0].hours;
+    top.forEach(function(t, i){
+      wrap.appendChild(buildBarRow(t.name, t.hours, max, i === 0));
+    });
+  }
+
+  function renderWorkload(){
+    var names = workload.order.filter(function(n){ return !!workload.designers[n]; });
+    var hasData = names.length > 0;
+
+    document.getElementById("workloadSummaryPanel").hidden = !hasData;
+    document.getElementById("workloadPerDesignerPanel").hidden = !hasData;
+    document.getElementById("workloadOverallPanel").hidden = !hasData;
+
+    renderFileList();
+    if(!hasData) return;
+    renderTotalsChart(names);
+    renderPerDesigner(names);
+    renderOverallChart(names);
+  }
+
+  document.getElementById("workloadFileInput").addEventListener("change", function(e){
+    var files = e.target.files;
+    if(!files || !files.length) return;
+    handleFiles(files);
+    e.target.value = "";
+  });
+
+  document.getElementById("btnClearWorkload").addEventListener("click", function(){
+    var hasData = workload.order.length > 0;
+    if(!hasData) return;
+    if(confirm("読み込んだ稼働データをすべて消去します。よろしいですか？")){
+      workload = defaultWorkload();
+      saveWorkload();
+      renderWorkload();
+    }
+  });
+
+  renderWorkload();
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+
+  var IDEAL_KEY = "team-simulator-ideal-data-v1";
+  var CURRENT_KEY = "team-simulator-data-v1";
+  var DEFAULT_AXIS = { left:"クリエイティブ", right:"数字", bottom:"プレイヤー", top:"マネジメント" };
+
+  var STATUS_COLORS = {
+    green: getCss("--green"), yellow: getCss("--yellow"),
+    red: getCss("--red"), gray: getCss("--gray")
+  };
+  var STATUS_LABEL = { green:"余力あり", yellow:"やや飽和", red:"飽和", gray:"不明" };
+
+  function getCss(v){
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  }
+
+  function iuid(){ return "i_" + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+  function readCurrentData(){
+    try{
+      var raw = localStorage.getItem(CURRENT_KEY);
+      if(!raw) return { axis: DEFAULT_AXIS, members: [] };
+      var parsed = JSON.parse(raw);
+      if(!parsed.axis || !parsed.members) return { axis: DEFAULT_AXIS, members: [] };
+      return parsed;
+    }catch(e){
+      return { axis: DEFAULT_AXIS, members: [] };
+    }
+  }
+
+  function cloneFromCurrent(){
+    var cur = readCurrentData();
+    return {
+      members: cur.members.filter(function(m){ return !m.candidate; }).map(function(m){
+        return {
+          id: iuid(), name:m.name, x:m.x, y:m.y, status:m.status,
+          strength:m.strength, orientation:m.orientation, memo:m.memo, candidate:false
+        };
+      })
+    };
+  }
+
+  function loadIdeal(){
+    try{
+      var raw = localStorage.getItem(IDEAL_KEY);
+      if(!raw) return cloneFromCurrent();
+      var parsed = JSON.parse(raw);
+      if(!parsed.members) return cloneFromCurrent();
+      return parsed;
+    }catch(e){
+      return cloneFromCurrent();
+    }
+  }
+
+  var ideal = loadIdeal();
+  var selectedId = null;
+  var editingId = null;
+  var dragging = null;
+
+  function saveIdeal(){
+    localStorage.setItem(IDEAL_KEY, JSON.stringify(ideal));
+  }
+
+  function toast(msg){
+    var t = document.getElementById("toast");
+    if(!t) return;
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(function(){ t.classList.remove("show"); }, 2200);
+  }
+
+  function escapeHtml(str){
+    var d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
+
+  function getAxis(){
+    var l = document.getElementById("axisLeft");
+    var r = document.getElementById("axisRight");
+    var b = document.getElementById("axisBottom");
+    var t = document.getElementById("axisTop");
+    return {
+      left: (l && l.value) || DEFAULT_AXIS.left,
+      right: (r && r.value) || DEFAULT_AXIS.right,
+      bottom: (b && b.value) || DEFAULT_AXIS.bottom,
+      top: (t && t.value) || DEFAULT_AXIS.top
+    };
+  }
+
+  function findMember(id){
+    return ideal.members.find(function(m){ return m.id === id; });
+  }
+
+  /* ---------------- SVG Map ---------------- */
+  var svgNS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("idealMap");
+  var VB = 600;
+  var PAD = 46;
+
+  function toSvgX(x){ return PAD + (x/100) * (VB - PAD*2); }
+  function toSvgY(y){ return (VB - PAD) - (y/100) * (VB - PAD*2); }
+  function fromSvgX(px){ return clamp(Math.round(((px - PAD) / (VB - PAD*2)) * 100), 0, 100); }
+  function fromSvgY(py){ return clamp(Math.round((((VB - PAD) - py) / (VB - PAD*2)) * 100), 0, 100); }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function el(tag, attrs){
+    var e = document.createElementNS(svgNS, tag);
+    for(var k in attrs){ e.setAttribute(k, attrs[k]); }
+    return e;
+  }
+
+  function renderMap(){
+    var axis = getAxis();
+    svg.innerHTML = "";
+    svg.setAttribute("viewBox", "0 0 " + VB + " " + VB);
+
+    var mid = VB/2;
+    var plotMin = PAD, plotMax = VB - PAD;
+
+    svg.appendChild(el("rect",{x:plotMin,y:plotMin,width:mid-plotMin,height:mid-plotMin,fill:"#eef1e9",opacity:0.55}));
+    svg.appendChild(el("rect",{x:mid,y:plotMin,width:plotMax-mid,height:mid-plotMin,fill:"#f6ecd3",opacity:0.6}));
+    svg.appendChild(el("rect",{x:plotMin,y:mid,width:mid-plotMin,height:plotMax-mid,fill:"#f3ede0",opacity:0.45}));
+    svg.appendChild(el("rect",{x:mid,y:mid,width:plotMax-mid,height:plotMax-mid,fill:"#efe9df",opacity:0.45}));
+
+    svg.appendChild(el("rect",{x:plotMin,y:plotMin,width:plotMax-plotMin,height:plotMax-plotMin,fill:"none",stroke:"#ddd3bf","stroke-width":1.2}));
+
+    svg.appendChild(el("line",{x1:mid,y1:plotMin,x2:mid,y2:plotMax,stroke:"#ddd3bf","stroke-width":1,"stroke-dasharray":"4,4"}));
+    svg.appendChild(el("line",{x1:plotMin,y1:mid,x2:plotMax,y2:mid,stroke:"#ddd3bf","stroke-width":1,"stroke-dasharray":"4,4"}));
+
+    var zoneLabel = el("text",{x:plotMax-8,y:plotMin+22,"text-anchor":"end","font-size":"13","font-weight":"700",fill:"#a5793c"});
+    zoneLabel.textContent = "統括候補ゾーン";
+    svg.appendChild(zoneLabel);
+    var zoneRect = el("rect",{x:mid+ (plotMax-mid)*0.15, y:plotMin, width:(plotMax-mid)*0.85, height:(mid-plotMin)*0.55, fill:"none", stroke:"#c9a25a","stroke-width":1,"stroke-dasharray":"3,3", opacity:0.7});
+    svg.appendChild(zoneRect);
+
+    function axisText(x,y,anchor,txt){
+      var t = el("text",{x:x,y:y,"text-anchor":anchor,"font-size":"13",fill:"#6b6354","font-weight":"600"});
+      t.textContent = txt;
+      svg.appendChild(t);
+    }
+    axisText(plotMin+2, VB-14, "start", "← " + axis.left);
+    axisText(plotMax-2, VB-14, "end", axis.right + " →");
+    axisText(plotMin-8, plotMin+4, "start", "↑ " + axis.top);
+    var g2 = el("text",{x:plotMin-8,y:plotMax,"text-anchor":"start","font-size":"13",fill:"#6b6354","font-weight":"600"});
+    g2.textContent = "↓ " + axis.bottom;
+    svg.appendChild(g2);
+
+    /* faint guide lines back to the current-map position of same-named members */
+    var currentMembers = readCurrentData().members.filter(function(m){ return !m.candidate; });
+    ideal.members.forEach(function(m){
+      if(m.candidate) return;
+      var match = currentMembers.find(function(c){ return c.name === m.name; });
+      if(!match) return;
+      if(match.x === m.x && match.y === m.y) return;
+      var cx1 = toSvgX(match.x), cy1 = toSvgY(match.y);
+      var cx2 = toSvgX(m.x), cy2 = toSvgY(m.y);
+      svg.appendChild(el("line",{x1:cx1,y1:cy1,x2:cx2,y2:cy2,stroke:"#8a6d4c","stroke-width":1.2,"stroke-dasharray":"3,3",opacity:0.45}));
+      svg.appendChild(el("circle",{cx:cx1,cy:cy1,r:6,fill:"#8a6d4c",opacity:0.25}));
+    });
+
+    ideal.members.forEach(function(m){
+      var cx = toSvgX(m.x), cy = toSvgY(m.y);
+      var color = STATUS_COLORS[m.status] || STATUS_COLORS.gray;
+      var g = el("g",{ "data-id": m.id, style:"cursor:pointer;" });
+
+      var r = m.candidate ? 15 : 14;
+      var circle = el("circle",{cx:cx, cy:cy, r:r, fill: m.candidate ? "#fffefb" : color,
+        stroke: color, "stroke-width": m.candidate ? 2.4 : 1.5,
+        "stroke-dasharray": m.candidate ? "5,4" : "none", opacity: m.candidate ? 0.95 : 1 });
+      g.appendChild(circle);
+
+      if(selectedId === m.id){
+        var ring = el("circle",{cx:cx, cy:cy, r:r+5, fill:"none", stroke:"#8a6d4c", "stroke-width":2, "stroke-dasharray":"2,3"});
+        g.appendChild(ring);
+      }
+
+      var label = el("text",{x:cx, y:cy+r+15, "text-anchor":"middle", "font-size":"12.5", fill:"#4a4436", "font-weight": m.candidate ? "600":"500"});
+      label.textContent = m.name + (m.candidate ? "(採用予定)" : "");
+      g.appendChild(label);
+
+      g.addEventListener("pointerdown", function(ev){
+        ev.preventDefault();
+        dragging = { id: m.id, pointerId: ev.pointerId };
+        svg.setPointerCapture(ev.pointerId);
+        selectedId = m.id;
+        renderAll();
+      });
+      g.addEventListener("click", function(ev){ ev.stopPropagation(); });
+
+      svg.appendChild(g);
+    });
+
+    svg.onpointermove = function(ev){
+      if(!dragging) return;
+      var rect = svg.getBoundingClientRect();
+      var scale = VB / rect.width;
+      var px = (ev.clientX - rect.left) * scale;
+      var py = (ev.clientY - rect.top) * scale;
+      var m = findMember(dragging.id);
+      if(!m) return;
+      m.x = fromSvgX(px);
+      m.y = fromSvgY(py);
+      renderMap();
+      if(editingId === null && selectedId === m.id){ renderDetail(); }
+    };
+    function endDrag(){
+      if(dragging){ saveIdeal(); dragging = null; renderAll(); }
+    }
+    svg.onpointerup = endDrag;
+    svg.onpointercancel = endDrag;
+
+    svg.onclick = function(ev){
+      if(ev.target === svg){ selectedId = null; renderAll(); }
+    };
+  }
+
+  /* ---------------- Member list ---------------- */
+  function renderMemberList(){
+    var list = document.getElementById("idealMemberList");
+    list.innerHTML = "";
+    if(ideal.members.length === 0){
+      list.innerHTML = '<div class="empty-state">メンバーがいません。追加するか「現在をコピー」してください。</div>';
+      return;
+    }
+    ideal.members.forEach(function(m){
+      var row = document.createElement("div");
+      row.className = "member-row";
+      row.innerHTML =
+        '<span class="name"><span class="status-dot" style="background:' + (STATUS_COLORS[m.status]||STATUS_COLORS.gray) + '"></span>' +
+        escapeHtml(m.name) + (m.candidate ? ' <span class="tag">(採用予定)</span>' : '') + '</span>' +
+        '<span class="tag">' + m.x + ' / ' + m.y + '</span>';
+      row.addEventListener("click", function(){ selectedId = m.id; renderAll(); });
+      list.appendChild(row);
+    });
+  }
+
+  /* ---------------- Detail Panel ---------------- */
+  function renderDetail(){
+    var panel = document.getElementById("idealDetailPanel");
+    var body = document.getElementById("idealDetailBody");
+    var title = document.getElementById("idealDetailTitle");
+    if(!selectedId){ panel.classList.add("hidden"); return; }
+    var m = findMember(selectedId);
+    if(!m){ panel.classList.add("hidden"); return; }
+    panel.classList.remove("hidden");
+    var axis = getAxis();
+    title.textContent = m.name + (m.candidate ? "(採用予定)" : "");
+    body.innerHTML =
+      '<div class="field"><label>' + escapeHtml(axis.left) + ' ← → ' + escapeHtml(axis.right) + '</label><div>' + m.x + ' / 100</div></div>' +
+      '<div class="field"><label>' + escapeHtml(axis.bottom) + ' ← → ' + escapeHtml(axis.top) + '</label><div>' + m.y + ' / 100</div></div>' +
+      '<div class="field"><label>稼働状況</label><div>' + STATUS_LABEL[m.status] + '</div></div>' +
+      '<div class="field"><label>強み</label><div>' + escapeHtml(m.strength||"—") + '</div></div>' +
+      '<div class="field"><label>志向</label><div>' + escapeHtml(m.orientation||"—") + '</div></div>' +
+      '<div class="field"><label>メモ</label><div>' + escapeHtml(m.memo||"—") + '</div></div>' +
+      '<div class="form-actions">' +
+        '<button class="small" id="btnIdealEditThis">編集</button>' +
+        (m.candidate ? '<button class="small primary" id="btnIdealConfirm">採用予定を確定(通常メンバーに変換)</button><button class="small danger" id="btnIdealRemove">枠を消す</button>' :
+          '<button class="small danger" id="btnIdealDeleteThis">削除</button>') +
+      '</div>';
+
+    var editBtn = document.getElementById("btnIdealEditThis");
+    if(editBtn) editBtn.addEventListener("click", function(){ openEditModal(m.id); });
+    var delBtn = document.getElementById("btnIdealDeleteThis");
+    if(delBtn) delBtn.addEventListener("click", function(){
+      if(confirm(m.name + "を削除しますか？")){
+        ideal.members = ideal.members.filter(function(x){ return x.id !== m.id; });
+        selectedId = null; saveIdeal(); renderAll();
+      }
+    });
+    var confirmBtn = document.getElementById("btnIdealConfirm");
+    if(confirmBtn) confirmBtn.addEventListener("click", function(){
+      m.candidate = false; saveIdeal(); toast(m.name + "を確定しました"); renderAll();
+    });
+    var removeBtn = document.getElementById("btnIdealRemove");
+    if(removeBtn) removeBtn.addEventListener("click", function(){
+      ideal.members = ideal.members.filter(function(x){ return x.id !== m.id; });
+      selectedId = null; saveIdeal(); renderAll();
+    });
+  }
+
+  /* ---------------- Edit Modal ---------------- */
+  var modal = document.getElementById("idealEditModal");
+  var f_name = document.getElementById("if_name");
+  var f_x = document.getElementById("if_x");
+  var f_y = document.getElementById("if_y");
+  var f_strength = document.getElementById("if_strength");
+  var f_orientation = document.getElementById("if_orientation");
+  var f_memo = document.getElementById("if_memo");
+  var statusOpts = document.querySelectorAll("#idealStatusSelect .status-opt");
+  var currentStatus = "gray";
+
+  statusOpts.forEach(function(opt){
+    opt.addEventListener("click", function(){
+      currentStatus = opt.getAttribute("data-status");
+      statusOpts.forEach(function(o){ o.classList.remove("active"); });
+      opt.classList.add("active");
+    });
+  });
+
+  function openEditModal(id){
+    editingId = id || null;
+    var axis = getAxis();
+    document.getElementById("if_xLabel").textContent = axis.left + "軸 値 (0=" + axis.left + " / 100=" + axis.right + ")";
+    document.getElementById("if_yLabel").textContent = axis.bottom + "軸 値 (0=" + axis.bottom + " / 100=" + axis.top + ")";
+    if(id){
+      var m = findMember(id);
+      document.getElementById("idealModalTitle").textContent = "メンバーを編集";
+      f_name.value = m.name;
+      f_x.value = m.x;
+      f_y.value = m.y;
+      f_strength.value = m.strength || "";
+      f_orientation.value = m.orientation || "";
+      f_memo.value = m.memo || "";
+      currentStatus = m.status;
+    } else {
+      document.getElementById("idealModalTitle").textContent = "メンバーを追加";
+      f_name.value = ""; f_x.value = "50"; f_y.value = "50";
+      f_strength.value = ""; f_orientation.value = ""; f_memo.value = "";
+      currentStatus = "gray";
+    }
+    statusOpts.forEach(function(o){
+      o.classList.toggle("active", o.getAttribute("data-status") === currentStatus);
+    });
+    modal.classList.remove("hidden");
+  }
+
+  function closeModal(){
+    modal.classList.add("hidden");
+    editingId = null;
+  }
+
+  document.getElementById("btnIdealCancelModal").addEventListener("click", closeModal);
+  document.getElementById("btnIdealAddMember").addEventListener("click", function(){ openEditModal(null); });
+
+  document.getElementById("btnIdealSaveMember").addEventListener("click", function(){
+    var name = f_name.value.trim();
+    if(!name){ alert("名前を入力してください"); return; }
+    var x = clamp(parseInt(f_x.value,10) || 0, 0, 100);
+    var y = clamp(parseInt(f_y.value,10) || 0, 0, 100);
+
+    if(editingId){
+      var m = findMember(editingId);
+      m.name = name; m.x = x; m.y = y; m.status = currentStatus;
+      m.strength = f_strength.value.trim();
+      m.orientation = f_orientation.value.trim();
+      m.memo = f_memo.value.trim();
+    } else {
+      var newM = {
+        id: iuid(), name:name, x:x, y:y, status:currentStatus,
+        strength: f_strength.value.trim(), orientation: f_orientation.value.trim(),
+        memo: f_memo.value.trim(), candidate:false
+      };
+      ideal.members.push(newM);
+      selectedId = newM.id;
+    }
+    saveIdeal();
+    closeModal();
+    renderAll();
+  });
+
+  /* ---------------- Toolbar actions ---------------- */
+  document.getElementById("btnCopyFromCurrent").addEventListener("click", function(){
+    if(confirm("現在の配置を理想マップにコピーします。理想マップの既存データは上書きされます。よろしいですか？")){
+      ideal = cloneFromCurrent();
+      selectedId = null;
+      saveIdeal();
+      renderAll();
+      toast("現在の配置をコピーしました");
+    }
+  });
+
+  document.getElementById("btnIdealAddPlanned").addEventListener("click", function(){
+    var newM = { id: iuid(), name:"採用予定", x:50, y:50, status:"gray", strength:"", orientation:"", memo:"", candidate:true };
+    ideal.members.push(newM);
+    selectedId = newM.id;
+    saveIdeal();
+    renderAll();
+    openEditModal(newM.id);
+  });
+
+  document.getElementById("btnIdealReset").addEventListener("click", function(){
+    if(confirm("理想マップを初期状態(現在マップのコピー)に戻します。よろしいですか？")){
+      ideal = cloneFromCurrent();
+      selectedId = null;
+      saveIdeal();
+      renderAll();
+      toast("理想マップをリセットしました");
+    }
+  });
+
+  /* ---------------- Sync with current map ---------------- */
+  ["axisLeft","axisRight","axisBottom","axisTop"].forEach(function(id){
+    var input = document.getElementById(id);
+    if(input) input.addEventListener("input", renderMap);
+  });
+  window.addEventListener("team-sim:current-updated", renderMap);
+  window.addEventListener("team-sim:ideal-imported", function(){
+    ideal = loadIdeal();
+    selectedId = null;
+    renderAll();
+  });
+
+  /* ---------------- Render orchestration ---------------- */
+  function renderAll(){
+    renderMap();
+    renderMemberList();
+    renderDetail();
+  }
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
