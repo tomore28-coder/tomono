@@ -358,6 +358,18 @@
   }
   .indirect-row:last-child{ border-bottom:none; }
   .indirect-row b{ color:var(--ink); }
+  .dept-total-box{
+    background:var(--accent-soft); border:1px solid #ddc9a8; border-radius:12px;
+    padding:20px; text-align:center;
+  }
+  .dept-total-box .dept-total-label{ font-size:.85rem; color:var(--ink-soft); margin-bottom:6px; }
+  .dept-total-box .dept-total-value{ font-size:2.2rem; font-weight:800; color:var(--accent-dark); }
+  .workload-memo{
+    width:100%; min-height:160px; border:1px solid var(--panel-border); border-radius:10px;
+    padding:12px; font-size:.85rem; font-family:inherit; background:#fff; color:var(--ink);
+    resize:vertical; box-sizing:border-box;
+  }
+  .workload-memo-status{ font-size:.7rem; color:var(--accent-dark); margin-top:6px; min-height:14px; }
 
   /* map sections (current / ideal) */
   .section-header{
@@ -565,6 +577,19 @@
   <div class="panel" id="workloadSummaryPanel" hidden>
     <h2>デザイナー間の総稼働時間の比較</h2>
     <div class="workload-bars" id="workloadTotalsChart"></div>
+  </div>
+
+  <div class="panel" id="workloadDeptTotalPanel" hidden>
+    <div class="dept-total-box">
+      <div class="dept-total-label">デザイン部門 全体の合計稼働時間</div>
+      <div class="dept-total-value" id="workloadDeptTotalValue">0時間</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>今月の課題・気づきメモ <span class="sub">自由記述・自動保存</span></h2>
+    <textarea id="workloadMemo" class="workload-memo" placeholder="気づいたこと、課題、来月への申し送りなどを自由に書いてください"></textarea>
+    <div class="workload-memo-status" id="workloadMemoStatus"></div>
   </div>
 </div>
 
@@ -1833,11 +1858,19 @@
     return panel;
   }
 
+  function renderDeptTotal(names){
+    var total = names.reduce(function(sum, n){
+      return sum + (workload.designers[n].totalHours || 0);
+    }, 0);
+    document.getElementById("workloadDeptTotalValue").textContent = formatH(total) + "時間";
+  }
+
   function renderWorkload(){
     var names = workload.order.filter(function(n){ return !!workload.designers[n]; });
     var hasData = names.length > 0;
 
     document.getElementById("workloadSummaryPanel").hidden = !hasData;
+    document.getElementById("workloadDeptTotalPanel").hidden = !hasData;
 
     renderFileList();
 
@@ -1849,6 +1882,7 @@
       reportsWrap.appendChild(renderDesignerReport(name, workload.designers[name]));
     });
     renderTotalsChart(names);
+    renderDeptTotal(names);
   }
 
   document.getElementById("workloadFileInput").addEventListener("change", function(e){
@@ -1866,6 +1900,23 @@
       saveWorkload();
       renderWorkload();
     }
+  });
+
+  /* ---------------- Monthly notes memo ---------------- */
+  var MEMO_KEY = "team-simulator-workload-memo-v1";
+  var memoTextarea = document.getElementById("workloadMemo");
+  var memoStatusEl = document.getElementById("workloadMemoStatus");
+  var memoStatusTimer = null;
+
+  try{
+    memoTextarea.value = localStorage.getItem(MEMO_KEY) || "";
+  }catch(e){}
+
+  memoTextarea.addEventListener("input", function(){
+    try{ localStorage.setItem(MEMO_KEY, memoTextarea.value); }catch(e){}
+    memoStatusEl.textContent = "✓ 自動保存しました";
+    clearTimeout(memoStatusTimer);
+    memoStatusTimer = setTimeout(function(){ memoStatusEl.textContent = ""; }, 2000);
   });
 
   renderWorkload();
