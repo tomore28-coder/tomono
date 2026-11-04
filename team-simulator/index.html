@@ -379,6 +379,24 @@
   .section-header .toolbar{ margin-bottom:0; }
   .section-title{ font-size:1.05rem; font-weight:700; color:var(--accent-dark); margin:0; }
   .section-divider{ border:none; border-top:1px solid var(--panel-border); margin:8px 0 26px; }
+  /* 評価基準パネル */
+  .criteria{ background:var(--panel); border:1px solid var(--panel-border); border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:18px; overflow:hidden; }
+  .criteria > summary{ list-style:none; cursor:pointer; padding:14px 16px; display:flex; align-items:center; gap:8px; font-weight:700; color:var(--accent-dark); font-size:1rem; }
+  .criteria > summary::-webkit-details-marker{ display:none; }
+  .criteria > summary .sub{ font-size:.72rem; font-weight:400; color:var(--ink-soft); }
+  .criteria > summary::before{ content:"\25B8"; color:var(--accent); font-size:.9rem; transition:transform .15s; }
+  .criteria[open] > summary::before{ transform:rotate(90deg); }
+  .criteria-body{ padding:0 16px 16px; }
+  .criteria-axes{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .criteria-col{ background:var(--bg); border:1px solid var(--panel-border); border-radius:10px; padding:12px 14px; }
+  .criteria-col h3{ margin:0 0 2px; font-size:.9rem; color:var(--accent-dark); }
+  .criteria-col .axis-note{ font-size:.72rem; color:var(--ink-soft); margin:0 0 10px; }
+  .criteria-item{ margin-bottom:9px; }
+  .criteria-item:last-child{ margin-bottom:0; }
+  .criteria-item .k{ display:inline-block; font-weight:700; font-size:.78rem; color:#fff; background:var(--accent); border-radius:6px; padding:1px 7px; margin-right:6px; }
+  .criteria-item .t{ font-weight:600; font-size:.85rem; color:var(--ink); }
+  .criteria-item .d{ font-size:.78rem; color:var(--ink-soft); margin-top:2px; }
+  .criteria-core{ margin-top:14px; background:var(--accent-soft); border-radius:10px; padding:12px 14px; font-size:.82rem; color:var(--accent-dark); line-height:1.7; }
 </style>
 </head>
 <body>
@@ -397,6 +415,32 @@
 </nav>
 
 <div class="container tab-panel active" data-tab-panel="map">
+
+  <details class="criteria" open>
+    <summary>デザイン部門の評価基準 <span class="sub">配置・育成・評価の土台となる2軸</span></summary>
+    <div class="criteria-body">
+      <div class="criteria-axes">
+        <div class="criteria-col">
+          <h3>軸1：会社への貢献度</h3>
+          <p class="axis-note">「頼れるデザイン部門か」</p>
+          <div class="criteria-item"><span class="k">A</span><span class="t">成果</span><div class="d">デザインのクオリティ／新商品の売上初動の良さ</div></div>
+          <div class="criteria-item"><span class="k">B</span><span class="t">改善力（自律）</span><div class="d">数字を分析し、仮説を立て、自分で判断して動ける</div></div>
+          <div class="criteria-item"><span class="k">C</span><span class="t">量・スピード</span><div class="d">たくさん・速く・すぐ対応できる供給力</div></div>
+          <div class="criteria-item"><span class="k">D</span><span class="t">リーダーシップ・組織運営</span><div class="d">チームを回す声がけ・調整／周りを引っ張る牽引力／マニュアル化・仕組み化による統制・整備</div></div>
+        </div>
+        <div class="criteria-col">
+          <h3>軸2：個人の充実</h3>
+          <p class="axis-note">「本人の理想に近づけているか」※その人自身の理想を基準に測る</p>
+          <div class="criteria-item"><span class="k">A</span><span class="t">成長</span><div class="d">スキルアップ</div></div>
+          <div class="criteria-item"><span class="k">B</span><span class="t">報酬</span><div class="d">収入アップ</div></div>
+          <div class="criteria-item"><span class="k">C</span><span class="t">働き方・コンディション</span><div class="d">働き方の向上／メンタルの健全性</div></div>
+        </div>
+      </div>
+      <div class="criteria-core">
+        <strong>核となる考え方：</strong>望みと素質を接点に、<strong>軸1（貢献）</strong>と<strong>軸2（充実）</strong>が重なる場所に人を置く。両方が一緒に上がれば、成果 → 報酬・自信 → 成長 → さらに貢献、の<strong>ループ</strong>が回る。目指すのは、全員が<strong>「高い貢献 × 高い充実」</strong>の状態。
+      </div>
+    </div>
+  </details>
 
   <div class="section-header">
     <h2 class="section-title">現在の配置</h2>
