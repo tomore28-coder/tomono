@@ -370,6 +370,24 @@
     resize:vertical; box-sizing:border-box;
   }
   .workload-memo-status{ font-size:.7rem; color:var(--accent-dark); margin-top:6px; min-height:14px; }
+  /* monthly record + trend */
+  .monthly-record-row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .monthly-record-row label{ font-size:.82rem; color:var(--ink-soft); display:flex; align-items:center; gap:6px; }
+  .monthly-record-row input[type=month]{ font-family:inherit; font-size:.85rem; padding:6px 8px; border:1px solid var(--panel-border); border-radius:8px; background:#fff; color:var(--ink); }
+  .monthly-record-hint{ font-size:.72rem; color:var(--ink-soft); }
+  .monthly-legend{ display:flex; flex-wrap:wrap; gap:10px 16px; margin-bottom:10px; }
+  .monthly-legend .lg{ display:flex; align-items:center; gap:6px; font-size:.76rem; color:var(--ink); }
+  .monthly-legend .sw{ width:14px; height:3px; border-radius:2px; display:inline-block; }
+  .monthly-legend .sw.total{ height:4px; }
+  #monthlyChartWrap{ width:100%; overflow-x:auto; }
+  #monthlyChart{ width:100%; min-width:420px; height:auto; display:block; }
+  .monthly-table-wrap{ overflow-x:auto; margin-top:14px; }
+  .monthly-table{ border-collapse:collapse; font-size:.78rem; width:100%; min-width:360px; }
+  .monthly-table th, .monthly-table td{ border:1px solid var(--panel-border); padding:5px 9px; text-align:right; white-space:nowrap; }
+  .monthly-table th:first-child, .monthly-table td:first-child{ text-align:left; }
+  .monthly-table thead th{ background:var(--accent-soft); color:var(--accent-dark); font-weight:700; }
+  .monthly-table td.total-cell{ font-weight:700; color:var(--accent-dark); }
+  .monthly-table .del-month{ cursor:pointer; color:var(--red); border:none; background:none; font-size:.9rem; padding:0 2px; }
 
   /* map sections (current / ideal) */
   .section-header{
@@ -628,6 +646,28 @@
       <div class="dept-total-label">デザイン部門 全体の合計稼働時間</div>
       <div class="dept-total-value" id="workloadDeptTotalValue">0時間</div>
     </div>
+  </div>
+
+  <div class="panel" id="monthlyRecordPanel">
+    <h2>月次記録 <span class="sub">この月の合計を保存。保存後は上のCSVを消してOK</span></h2>
+    <div class="monthly-record-row">
+      <label>対象月 <input type="month" id="monthlyMonthInput"></label>
+      <button type="button" class="primary small" id="btnRecordMonth" disabled>この月を記録／更新</button>
+      <span class="monthly-record-hint" id="monthlyRecordHint">※先にCSVを読み込むと記録できます</span>
+    </div>
+  </div>
+
+  <div class="panel" id="monthlyTrendPanel" hidden>
+    <h2>月別 稼働時間の推移 <span class="sub">記録した月をグラフで表示</span></h2>
+    <div class="monthly-legend" id="monthlyLegend"></div>
+    <div id="monthlyChartWrap"><svg id="monthlyChart" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <div class="monthly-table-wrap"><table class="monthly-table" id="monthlyTable"></table></div>
+    <div class="form-actions" style="margin-top:14px;">
+      <button type="button" class="small" id="btnMonthlyExport">記録をエクスポート(JSON)</button>
+      <button type="button" class="small" id="btnMonthlyImport">インポート</button>
+      <input type="file" id="monthlyImportInput" class="file-input" accept="application/json">
+    </div>
+    <p class="workload-note">※記録はこの端末のブラウザ内に保存されます。機種変更やバックアップ時はエクスポートしてください。</p>
   </div>
 
   <div class="panel">
@@ -1915,6 +1955,7 @@
 
     document.getElementById("workloadSummaryPanel").hidden = !hasData;
     document.getElementById("workloadDeptTotalPanel").hidden = !hasData;
+    if(typeof syncMonthlyRecordAvail === "function") syncMonthlyRecordAvail(hasData);
 
     renderFileList();
 
@@ -1963,7 +2004,261 @@
     memoStatusTimer = setTimeout(function(){ memoStatusEl.textContent = ""; }, 2000);
   });
 
+  /* ---------------- Monthly totals record + trend ---------------- */
+  var MONTHLY_KEY = "team-simulator-monthly-v1";
+  var DESIGNER_COLORS = ["#5b9279","#c69a3d","#bd5b4c","#6a7b9a","#9a7bb0","#7aa3a0","#b07d5a","#8a9a5b"];
+
+  function showToast(msg){
+    var t = document.getElementById("toast");
+    if(!t) return;
+    t.textContent = msg; t.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function(){ t.classList.remove("show"); }, 2200);
+  }
+
+  function loadMonthly(){
+    try{
+      var raw = localStorage.getItem(MONTHLY_KEY);
+      if(!raw) return [];
+      var p = JSON.parse(raw);
+      return Array.isArray(p) ? p : [];
+    }catch(e){ return []; }
+  }
+  var monthlyRecords = loadMonthly();
+  function saveMonthly(){
+    try{ localStorage.setItem(MONTHLY_KEY, JSON.stringify(monthlyRecords)); }catch(e){}
+  }
+
+  var monthInput = document.getElementById("monthlyMonthInput");
+  var btnRecordMonth = document.getElementById("btnRecordMonth");
+  var monthlyHint = document.getElementById("monthlyRecordHint");
+
+  (function(){
+    try{
+      var d = new Date();
+      var mm = ("0" + (d.getMonth()+1)).slice(-2);
+      if(monthInput && !monthInput.value) monthInput.value = d.getFullYear() + "-" + mm;
+    }catch(e){}
+  })();
+
+  function syncMonthlyRecordAvail(hasData){
+    if(!btnRecordMonth) return;
+    btnRecordMonth.disabled = !hasData;
+    if(monthlyHint) monthlyHint.textContent = hasData ? "記録したら、上の読み込みデータは消して大丈夫です" : "※先にCSVを読み込むと記録できます";
+  }
+
+  function monthLabel(m){
+    var parts = String(m).split("-");
+    if(parts.length >= 2) return parseInt(parts[1],10) + "月";
+    return String(m);
+  }
+  function monthLabelFull(m){
+    var parts = String(m).split("-");
+    if(parts.length >= 2) return parts[0] + "年" + parseInt(parts[1],10) + "月";
+    return String(m);
+  }
+
+  function recordCurrentMonth(){
+    var names = workload.order.filter(function(n){ return !!workload.designers[n]; });
+    if(!names.length){ alert("先にCSVを読み込んでください。"); return; }
+    var month = monthInput && monthInput.value ? monthInput.value : "";
+    if(!month){ alert("対象月を選んでください。"); return; }
+    var byDesigner = {};
+    var total = 0;
+    names.forEach(function(n){
+      var h = Math.round((workload.designers[n].totalHours || 0) * 10) / 10;
+      byDesigner[n] = h;
+      total += h;
+    });
+    total = Math.round(total * 10) / 10;
+    var existingIdx = -1;
+    for(var i=0;i<monthlyRecords.length;i++){ if(monthlyRecords[i].month === month){ existingIdx = i; break; } }
+    var rec = { month: month, total: total, byDesigner: byDesigner };
+    if(existingIdx >= 0){
+      if(!confirm(monthLabelFull(month) + " は既に記録があります。上書きしますか？")) return;
+      monthlyRecords[existingIdx] = rec;
+    } else {
+      monthlyRecords.push(rec);
+    }
+    monthlyRecords.sort(function(a,b){ return a.month < b.month ? -1 : (a.month > b.month ? 1 : 0); });
+    saveMonthly();
+    renderMonthly();
+    showToast(monthLabelFull(month) + " を記録しました（計 " + formatH(total) + "h）");
+  }
+
+  function deleteMonth(month){
+    if(!confirm(monthLabelFull(month) + " の記録を削除しますか？")) return;
+    monthlyRecords = monthlyRecords.filter(function(r){ return r.month !== month; });
+    saveMonthly();
+    renderMonthly();
+  }
+
+  function allDesignerNames(){
+    var set = {}; var order = [];
+    monthlyRecords.forEach(function(r){
+      Object.keys(r.byDesigner || {}).forEach(function(n){
+        if(!set[n]){ set[n] = true; order.push(n); }
+      });
+    });
+    return order;
+  }
+
+  function niceCeil(v){
+    if(v <= 0) return 10;
+    var pow = Math.pow(10, Math.floor(Math.log(v)/Math.LN10));
+    var n = v / pow;
+    var step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+    return step * pow;
+  }
+
+  function renderMonthlyChart(){
+    var svg = document.getElementById("monthlyChart");
+    var legend = document.getElementById("monthlyLegend");
+    svg.innerHTML = ""; legend.innerHTML = "";
+    var W = 720, H = 320, padL = 44, padR = 16, padT = 16, padB = 36;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var recs = monthlyRecords;
+    var n = recs.length;
+
+    var maxVal = 0;
+    recs.forEach(function(r){
+      if(r.total > maxVal) maxVal = r.total;
+      Object.keys(r.byDesigner || {}).forEach(function(k){ if(r.byDesigner[k] > maxVal) maxVal = r.byDesigner[k]; });
+    });
+    var yMax = niceCeil(maxVal || 10);
+
+    function xAt(i){ return n <= 1 ? padL + plotW/2 : padL + (plotW * i / (n - 1)); }
+    function yAt(v){ return padT + plotH - (plotH * v / yMax); }
+
+    var NS = "http://www.w3.org/2000/svg";
+    function el(tag, attrs){
+      var e = document.createElementNS(NS, tag);
+      for(var k in attrs){ e.setAttribute(k, attrs[k]); }
+      return e;
+    }
+
+    // y gridlines + labels
+    var ticks = 4;
+    for(var t=0; t<=ticks; t++){
+      var val = yMax * t / ticks;
+      var y = yAt(val);
+      svg.appendChild(el("line", { x1:padL, y1:y, x2:W-padR, y2:y, stroke:"#e4ddcf", "stroke-width":1 }));
+      var lab = el("text", { x:padL-6, y:y+3, "text-anchor":"end", "font-size":10, fill:"#7a7364" });
+      lab.textContent = formatH(val);
+      svg.appendChild(lab);
+    }
+    // x labels
+    recs.forEach(function(r, i){
+      var x = xAt(i);
+      var lab = el("text", { x:x, y:H-padB+16, "text-anchor":"middle", "font-size":11, fill:"#7a7364" });
+      lab.textContent = monthLabel(r.month);
+      svg.appendChild(lab);
+    });
+
+    // designer lines
+    var dnames = allDesignerNames();
+    dnames.forEach(function(name, di){
+      var color = DESIGNER_COLORS[di % DESIGNER_COLORS.length];
+      var pts = [];
+      recs.forEach(function(r, i){
+        var v = r.byDesigner ? r.byDesigner[name] : undefined;
+        if(v == null) return;
+        pts.push({ x: xAt(i), y: yAt(v) });
+      });
+      if(pts.length){
+        if(pts.length > 1){
+          var dpath = pts.map(function(p, idx){ return (idx===0?"M":"L") + p.x.toFixed(1) + " " + p.y.toFixed(1); }).join(" ");
+          svg.appendChild(el("path", { d:dpath, fill:"none", stroke:color, "stroke-width":1.6, "stroke-linejoin":"round", opacity:0.9 }));
+        }
+        pts.forEach(function(p){ svg.appendChild(el("circle", { cx:p.x, cy:p.y, r:2.6, fill:color })); });
+      }
+      var lg = document.createElement("span");
+      lg.className = "lg";
+      lg.innerHTML = '<span class="sw" style="background:' + color + '"></span>' + escapeHtmlW(name);
+      legend.appendChild(lg);
+    });
+
+    // total line (bold, drawn on top)
+    var tpts = recs.map(function(r, i){ return { x: xAt(i), y: yAt(r.total) }; });
+    if(tpts.length > 1){
+      var tpath = tpts.map(function(p, idx){ return (idx===0?"M":"L") + p.x.toFixed(1) + " " + p.y.toFixed(1); }).join(" ");
+      svg.appendChild(el("path", { d:tpath, fill:"none", stroke:"#5f4a30", "stroke-width":3, "stroke-linejoin":"round" }));
+    }
+    tpts.forEach(function(p){ svg.appendChild(el("circle", { cx:p.x, cy:p.y, r:3.6, fill:"#5f4a30" })); });
+    var lgT = document.createElement("span");
+    lgT.className = "lg";
+    lgT.innerHTML = '<span class="sw total" style="background:#5f4a30"></span><b>部門合計</b>';
+    legend.insertBefore(lgT, legend.firstChild);
+  }
+
+  function renderMonthlyTable(){
+    var table = document.getElementById("monthlyTable");
+    var recs = monthlyRecords;
+    var dnames = allDesignerNames();
+    var head = "<thead><tr><th>月</th><th>部門合計</th>";
+    dnames.forEach(function(nm){ head += "<th>" + escapeHtmlW(nm) + "</th>"; });
+    head += "<th></th></tr></thead>";
+    var body = "<tbody>";
+    recs.forEach(function(r){
+      body += "<tr><td>" + escapeHtmlW(monthLabelFull(r.month)) + "</td>";
+      body += '<td class="total-cell">' + formatH(r.total) + "h</td>";
+      dnames.forEach(function(nm){
+        var v = r.byDesigner ? r.byDesigner[nm] : undefined;
+        body += "<td>" + (v == null ? "—" : formatH(v) + "h") + "</td>";
+      });
+      body += '<td><button type="button" class="del-month" data-month="' + escapeHtmlW(r.month) + '" title="削除">✕</button></td></tr>';
+    });
+    body += "</tbody>";
+    table.innerHTML = head + body;
+    Array.prototype.forEach.call(table.querySelectorAll(".del-month"), function(btn){
+      btn.addEventListener("click", function(){ deleteMonth(btn.getAttribute("data-month")); });
+    });
+  }
+
+  function renderMonthly(){
+    var panel = document.getElementById("monthlyTrendPanel");
+    var has = monthlyRecords.length > 0;
+    panel.hidden = !has;
+    if(!has) return;
+    renderMonthlyChart();
+    renderMonthlyTable();
+  }
+
+  if(btnRecordMonth) btnRecordMonth.addEventListener("click", recordCurrentMonth);
+
+  var btnMonthlyExport = document.getElementById("btnMonthlyExport");
+  var btnMonthlyImport = document.getElementById("btnMonthlyImport");
+  var monthlyImportInput = document.getElementById("monthlyImportInput");
+  if(btnMonthlyExport) btnMonthlyExport.addEventListener("click", function(){
+    var blob = new Blob([JSON.stringify(monthlyRecords, null, 2)], { type:"application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "稼働推移_月次記録.json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+  if(btnMonthlyImport) btnMonthlyImport.addEventListener("click", function(){ monthlyImportInput.click(); });
+  if(monthlyImportInput) monthlyImportInput.addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var data = JSON.parse(reader.result);
+        if(!Array.isArray(data)){ alert("形式が正しくありません。"); return; }
+        monthlyRecords = data;
+        monthlyRecords.sort(function(a,b){ return a.month < b.month ? -1 : (a.month > b.month ? 1 : 0); });
+        saveMonthly();
+        renderMonthly();
+        showToast("記録をインポートしました");
+      }catch(err){ alert("読み込みに失敗しました。"); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  });
+
   renderWorkload();
+  renderMonthly();
 })();
 </script>
 
